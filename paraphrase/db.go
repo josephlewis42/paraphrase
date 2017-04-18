@@ -232,7 +232,7 @@ func (db *ParaphraseDb) Insert(doc *Document) (uint64, error) {
 			hashb := []byte(strconv.Itoa(int(hash)))
 			val := intBucket.Get(hashb)
 
-			keys := make([]uint64, 1)
+			keys := make([]uint64, 0)
 			if val != nil {
 				json.Unmarshal(val, &keys)
 			}
