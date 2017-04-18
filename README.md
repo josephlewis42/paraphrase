@@ -1,6 +1,6 @@
 # Paraphrase
 
-**Paraphrase** is open-source text similarity measurement software inspired by MOSS.
+Paraphrase is open-source text similarity measurement software inspired by MOSS.
 It can compare sets of documents to find content that's been duplicated.
 Potential use cases are:
 
@@ -10,23 +10,23 @@ Potential use cases are:
 
 ## Usage
 
-**Paraphrase** has a slew of commands, generally your needs will be as simple as
+Paraphrase has a slew of commands, generally your needs will be as simple as
 upload then report.
 
 ### Uploading
 
-You can upload documents one at a time or in batches using pipes:
+You can upload documents one at a time or in batches
 
 ```
-$ paraphrase upload path/to/my/file.ext
-path/to/my/file.ext
-Document uploaded with id 125599466215815689
+$ paraphrase add main.go
+Adding: main.go
+main.go got id 3
 
-$ find -name "*.java" | paraphrase upload
-./Hello.java
-Document uploaded with id 125599466215815689
-./World.java
-Document uploaded with id 5439377427244003676
+$ paraphrase add examples/*.java
+Adding: examples/DocA.java
+examples/DocA.java got id 4
+Adding: examples/DocB.java
+examples/DocB.java got id 5
 ```
 
 ### Reporting
@@ -35,9 +35,9 @@ You can run a report for a specific document.
 The output is formatted `<document id>: <num matches> (<pct matching>)`.
 
 ```
-$ paraphrase report 5439377427244003676
-5439377427244003676: 21 matches (37%)
-1239371856205487029: 7 matches (7%)
+$ paraphrase report 5
+4: 21 matches (20%)
+2: 101 matches (100%)
 ...
 ```
 
@@ -46,31 +46,21 @@ $ paraphrase report 5439377427244003676
 You can test various parts of the `paraphrase` tool if you want to see what
 it's doing internally.
 
- normalize		prints the normalized version of the doc
- fingerprint	prints out the fingerprints of the doc
- winnow		prints out the winnowedfingerprints of the doc
- similarity 	prints the overlap between two local files
- upload 		uploads a file to the database
- body 			shows the body of a given file
- report		generates a similarity report for the document with the given id
- hashes		gets the hashes for the document with the given id
- info			prints out info for the document with the given id
- list			lists the ids of all the loaded documents
-
+    xadd        (read only, debug) Dry run of an add.
+    xhash       (read only, debug) Print the hashes for a document
+    xnorm       (read only, debug) Normalizes files like before they're processed
+    xsim        (read only, debug) Calculates the similarity of two documents
+    xwinnow     (read only, debug) Print the winnowed hashes
 
 ## How does it work?
 
-
-
-## Accuracy
-
-Ultimately, **Paraphrase** is a tool meant to find similarity between documents.
-It works very much the same way search engines do.
+Check out "[Winnowing: local algorithms for document fingerprinting](https://doi.org/10.1145/872757.872770)"
+for information about how paraphrase works behind the scenes.
 
 
 ## Environment
 
-**Paraphrase** is built to be a fully copy/pasteable binary that can be compiled
+Paraphrase is built to be a fully copy/pasteable binary that can be compiled
 for Windows, OSX and Linux.
 
 The only utilities you need to interact with it are a CLI and optionally a
@@ -86,9 +76,8 @@ The following algorithms are used/will be used:
 * [Winnowing Document Fingerprinting](https://doi.org/10.1145/872757.872770) DOI: 10.1145/872757.872770
 
 
-
 ## License
 
 Copyright 2017 Joseph Lewis III <joseph@josephlewis.net>
 
-Licensed under the MIT license.
+Licensed under the MIT license. See LICENSE for the full text.
