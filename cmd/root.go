@@ -2,11 +2,17 @@ package cmd
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 
 	"github.com/josephlewis42/paraphrase/paraphrase"
 	"github.com/spf13/cobra"
+)
+
+var (
+	projectBase string
+	db          *paraphrase.ParaphraseDb
 )
 
 var RootCmd = &cobra.Command{
@@ -18,6 +24,12 @@ between documents`,
 	Run: func(cmd *cobra.Command, args []string) {
 		cmd.Usage()
 	},
+
+	PersistentPostRun: func(cmd *cobra.Command, args []string) {
+		if db != nil {
+			db.Close()
+		}
+	},
 }
 
 func init() {
@@ -25,23 +37,25 @@ func init() {
 
 	// commands for debugging
 	RootCmd.AddCommand(CmdXNorm, CmdXAdd, CmdXSim, CmdXWinnow, CmdXHash)
+	RootCmd.PersistentFlags().StringVarP(&projectBase, "base", "b", ".", "base project directory")
+}
+
+func openDb(cmd *cobra.Command, args []string) error {
+	var err error
+	db, err = paraphrase.Open(projectBase)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 var DbCmdList = &cobra.Command{
-	Use:   "list",
-	Short: "List the ids of all documents",
-	Long:  `List the ids of all documents`,
+	Use:     "list",
+	Short:   "List the ids of all documents",
+	Long:    `List the ids of all documents`,
+	PreRunE: openDb,
 	Run: func(cmd *cobra.Command, args []string) {
-		// Do Stuff Here
-
-		db, err := paraphrase.Open(".")
-
-		if err != nil {
-			panic(err)
-		}
-
-		defer db.Close()
-
 		docs, _ := db.DocList()
 
 		for _, doc := range docs {
@@ -51,25 +65,15 @@ var DbCmdList = &cobra.Command{
 }
 
 var DbCmdGet = &cobra.Command{
-	Use:   "get docid [docid ...]",
-	Short: "(read only) Get document info for the given doc id",
-	Long:  `Get document info for the given doc id`,
-	Run: func(cmd *cobra.Command, args []string) {
+	Use:     "get DOCID [DOCID]...",
+	Short:   "(read only) Get document info for the given doc id",
+	Long:    `Get document info for the given doc id`,
+	PreRunE: openDb,
+	RunE: func(cmd *cobra.Command, args []string) error {
 
 		if len(args) == 0 {
-			fmt.Println("You must supply at least one document id.")
-			fmt.Println()
-			cmd.Usage()
-			return
+			return errors.New("You must supply at least one document id.")
 		}
-
-		db, err := paraphrase.Open(".")
-
-		if err != nil {
-			panic(err)
-		}
-
-		defer db.Close()
 
 		for _, docid := range args {
 
@@ -87,85 +91,20 @@ var DbCmdGet = &cobra.Command{
 
 		}
 
-		// Do Stuff Here
-	},
-}
-
-var DbCmdAdd = &cobra.Command{
-	Use:   "add path [path ...]",
-	Short: "Add a document to the database",
-	Long:  `Adds a document with the given path to the database`,
-	Run: func(cmd *cobra.Command, args []string) {
-
-		if len(args) == 0 {
-			fmt.Println("You must supply at least one document id.")
-			fmt.Println()
-			cmd.Usage()
-			return
-		}
-
-		db, err := paraphrase.Open(".")
-
-		if err != nil {
-			panic(err)
-		}
-
-		defer db.Close()
-
-		if len(args) == 0 {
-			fmt.Println("You must supply at least one document.")
-			fmt.Println()
-			cmd.Usage()
-			return
-		}
-
-		for _, path := range args {
-			fmt.Printf("Adding: %s\n", path)
-
-			doc, err := paraphrase.CreateDocumentFromFile(path)
-
-			if err != nil {
-				fmt.Printf("Error: %s", err)
-				fmt.Println()
-				continue
-			}
-
-			id, err := db.Insert(doc)
-
-			if err != nil {
-				fmt.Printf("Error: %s", err)
-				fmt.Println()
-				continue
-			}
-
-			fmt.Printf("%s got id %d", path, id)
-			fmt.Println()
-		}
-
-		// Do Stuff Here
+		return nil
 	},
 }
 
 var CmdReport = &cobra.Command{
-	Use:   "report docid [docid...]",
-	Short: "Creates similarity reports for the given documents",
-	Long:  ``,
-	Run: func(cmd *cobra.Command, args []string) {
+	Use:     "report docid [docid...]",
+	Short:   "Creates similarity reports for the given documents",
+	Long:    ``,
+	PreRunE: openDb,
+	RunE: func(cmd *cobra.Command, args []string) error {
 
 		if len(args) == 0 {
-			fmt.Println("You must supply at least one document.")
-			fmt.Println()
-			cmd.Usage()
-			return
+			return errors.New("You must supply at least one document.")
 		}
-
-		db, err := paraphrase.Open(".")
-
-		if err != nil {
-			panic(err)
-		}
-
-		defer db.Close()
 
 		for _, docid := range args {
 
@@ -179,5 +118,6 @@ var CmdReport = &cobra.Command{
 			paraphrase.Report(uint64(id), db)
 		}
 
+		return nil
 	},
 }

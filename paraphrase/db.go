@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"path"
 	"strconv"
 	"strings"
@@ -49,7 +48,6 @@ func Open(directory string) (*ParaphraseDb, error) {
 
 	paraphrase.db, err = bolt.Open(dbPath, 0600, nil)
 	if err != nil {
-		log.Fatal(err)
 		return nil, err
 	}
 
