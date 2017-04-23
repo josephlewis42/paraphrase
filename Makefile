@@ -18,7 +18,7 @@ all: paraphrase
 
 paraphrase: outputdir
 	$(GO) build $(GOFLAGS) -o $(OUTDIR)/paraphrase main.go
-	$(WIN) $(GO) build $(GOFLAGS) -o $(OUTDIR)/paraphrase.exe main.go
+	#$(WIN) $(GO) build $(GOFLAGS) -o $(OUTDIR)/paraphrase.exe main.go
 
 version:
 	echo "Version: " $(VERSION)

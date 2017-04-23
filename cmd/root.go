@@ -27,6 +27,7 @@ func init() {
 	// }
 
 	RootCmd.AddCommand(DbCmdList, DbCmdGet, DbCmdAdd, CmdReport, versionCmd)
+	RootCmd.AddCommand(cmdDocText)
 
 	// commands for debugging
 	RootCmd.AddCommand(CmdXNorm, CmdXAdd, CmdXSim, CmdXWinnow, CmdXHash)
@@ -96,18 +97,17 @@ var DbCmdGet = &cobra.Command{
 	Long:    `Get document info for the given doc id`,
 	PreRunE: openDb,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		docIds, err := parseDocIds(args, 1)
 
-		if len(args) == 0 {
-			return errors.New("You must supply at least one document id.")
+		if err != nil {
+			return err
 		}
 
-		for _, docid := range args {
-
-			id, _ := strconv.Atoi(docid)
-			doc, err := db.GetDoc(uint64(id))
+		for _, id := range docIds {
+			doc, err := db.GetDoc(id)
 
 			if err != nil {
-				fmt.Printf("Error document %s does not exist.\n", docid)
+				fmt.Printf("Error document %d does not exist.\n", id)
 				continue
 			}
 
@@ -127,23 +127,75 @@ var CmdReport = &cobra.Command{
 	Long:    ``,
 	PreRunE: openDb,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		docIds, err := parseDocIds(args, 1)
 
-		if len(args) == 0 {
-			return errors.New("You must supply at least one document.")
+		if err != nil {
+			return err
 		}
 
-		for _, docid := range args {
-
-			id, err := strconv.Atoi(docid)
-
-			if err != nil {
-				fmt.Printf("Could not convert %s to a document id.\n", docid)
-				continue
-			}
-
-			paraphrase.Report(uint64(id), db)
+		for _, id := range docIds {
+			paraphrase.Report(id, db)
 		}
 
 		return nil
 	},
+}
+
+var cmdDocText = &cobra.Command{
+	Use:     "doctext docid [docid...]",
+	Short:   "gets the text of the given document(s)",
+	Long:    ``,
+	PreRunE: openDb,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		docIds, err := parseDocIds(args, 1)
+
+		if err != nil {
+			return err
+		}
+
+		for _, id := range docIds {
+			text, err := db.ReadDocumentText(id)
+
+			if err != nil {
+				return err
+			}
+
+			fmt.Println(string(text))
+		}
+
+		return nil
+	},
+}
+
+// parseDocIds converts a list of strings to uint64s
+// it will process the whole list even if an error is encountered
+// so if only one element is bad, the rest will still be returned
+// if the total number of successfully parse elements is less than numRequired
+// an appropriate error will be returned
+func parseDocIds(args []string, numRequired int) ([]uint64, error) {
+	ids := make([]uint64, 0)
+
+	var outerr error
+
+	for _, docid := range args {
+
+		id, err := strconv.Atoi(docid)
+
+		if id < 0 || err != nil {
+			outerr = errors.New("Invalid docid, ids are positive integers")
+			continue
+		}
+
+		ids = append(ids, uint64(id))
+	}
+
+	if len(ids) < numRequired && outerr == nil {
+		if numRequired == 1 {
+			return ids, errors.New("You must supply at least one documents")
+		} else {
+			return ids, errors.New(fmt.Sprintf("You must supply at least %d documents", numRequired))
+		}
+	}
+
+	return ids, outerr
 }

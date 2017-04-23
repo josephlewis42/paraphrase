@@ -3,6 +3,7 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"io/ioutil"
 
 	"github.com/josephlewis42/paraphrase/paraphrase"
 	"github.com/spf13/cobra"
@@ -31,6 +32,12 @@ var DbCmdAdd = &cobra.Command{
 		for _, path := range args {
 			fmt.Printf("Adding: %s\n", path)
 
+			bytes, err := ioutil.ReadFile(path)
+
+			if err != nil {
+				return err
+			}
+
 			doc, err := paraphrase.CreateDocumentFromFile(path)
 
 			if err != nil {
@@ -42,9 +49,12 @@ var DbCmdAdd = &cobra.Command{
 			id, err := db.Insert(doc)
 
 			if err != nil {
-				fmt.Printf("Error: %s", err)
-				fmt.Println()
-				continue
+				return err
+			}
+
+			err = db.InsertDocumentText(id, bytes)
+			if err != nil {
+				return err
 			}
 
 			fmt.Printf("%s got id %d", path, id)

@@ -10,15 +10,41 @@ import (
 	"strings"
 
 	"github.com/boltdb/bolt"
+	"github.com/golang/snappy"
 )
 
 const (
-	DbName         = "paraphrasedb.bolt"
-	DocumentBucket = "documents"
-	IndexBucket    = "index"
-	MinIndex       = "00000000000000000000"
-	MaxIndex       = "99999999999999999999"
+	DbName                 = "paraphrasedb.bolt"
+	DocumentBucket         = "documents"
+	IndexBucket            = "index"
+	SettingsBucket         = "settings"
+	FileBucket             = "files"
+	MinIndex               = "00000000000000000000"
+	MaxIndex               = "99999999999999999999"
+	CurrentSettingsVersion = 1 // the version of the settings file, won't match the version of paraphrase
 )
+
+type Settings struct {
+	Version         int
+	SaveDocuments   bool
+	ImportPrefix    string
+	WindowSize      int
+	FingerprintSize int
+	RobustHash      bool
+}
+
+func NewDefaultSettings() Settings {
+	var settings Settings
+
+	settings.Version = CurrentSettingsVersion
+	settings.SaveDocuments = true
+	settings.ImportPrefix = ""
+	settings.WindowSize = 10
+	settings.FingerprintSize = 10
+	settings.RobustHash = true
+
+	return settings
+}
 
 type Document struct {
 	Id        uint64 // the ID assigned by the bolt db
@@ -46,6 +72,10 @@ func Open(directory string) (*ParaphraseDb, error) {
 	// It will be created if it doesn't exist.
 	dbPath := path.Join(directory, DbName)
 
+	// if _, err := os.Stat(dbPath); err != nil {
+	// 	return nil, errors.New("Could not open the paraphrase db, run paraphrase init to set it up")
+	// }
+
 	paraphrase.db, err = bolt.Open(dbPath, 0600, nil)
 	if err != nil {
 		return nil, err
@@ -61,14 +91,14 @@ func Open(directory string) (*ParaphraseDb, error) {
 
 func (db *ParaphraseDb) init() error {
 	return db.db.Update(func(tx *bolt.Tx) error {
-		_, err := tx.CreateBucketIfNotExists([]byte(DocumentBucket))
-		if err != nil {
-			return fmt.Errorf("create bucket: %s", err)
-		}
 
-		_, err = tx.CreateBucketIfNotExists([]byte(IndexBucket))
-		if err != nil {
-			return fmt.Errorf("create bucket: %s", err)
+		buckets := []string{DocumentBucket, IndexBucket, SettingsBucket, FileBucket}
+
+		for _, bucket := range buckets {
+			_, err := tx.CreateBucketIfNotExists([]byte(bucket))
+			if err != nil {
+				return fmt.Errorf("create bucket: %s", err)
+			}
 		}
 
 		return nil
@@ -99,7 +129,7 @@ func (db *ParaphraseDb) DocList() ([]string, error) {
 
 func (db *ParaphraseDb) GetDoc(id uint64) (*Document, error) {
 
-	docs, err := db.scanDocs(idToKey(id, ""), 1)
+	docs, err := db.scanDocs(idToKey(id), 1)
 
 	if err != nil {
 		return nil, err
@@ -212,7 +242,7 @@ func (db *ParaphraseDb) Insert(doc *Document) (uint64, error) {
 
 		doc.Id = id
 
-		docHash := idToKey(doc.Id, doc.Path)
+		docHash := idToKey(doc.Id)
 
 		buf, err := json.Marshal(doc)
 		if err != nil {
@@ -255,6 +285,39 @@ func (db *ParaphraseDb) Insert(doc *Document) (uint64, error) {
 	return id, err
 }
 
-func idToKey(id uint64, path string) []byte {
+func (db *ParaphraseDb) InsertDocumentText(id uint64, doc []byte) error {
+	return db.db.Update(func(tx *bolt.Tx) error {
+
+		bucket := tx.Bucket([]byte(FileBucket))
+		encoded := snappy.Encode(nil, doc)
+		docHash := idToKey(id)
+
+		return bucket.Put(docHash, encoded)
+	})
+}
+
+func (db *ParaphraseDb) ReadDocumentText(id uint64) ([]byte, error) {
+	decoded := make([]byte, 0)
+	var err error
+
+	err = db.db.View(func(tx *bolt.Tx) error {
+
+		bucket := tx.Bucket([]byte(FileBucket))
+		docHash := idToKey(id)
+		encoded := bucket.Get(docHash)
+
+		if len(encoded) == 0 {
+			return errors.New("No such document id")
+		}
+
+		decoded, err = snappy.Decode(nil, encoded)
+		return err
+
+	})
+
+	return decoded, err
+}
+
+func idToKey(id uint64) []byte {
 	return []byte(strconv.Itoa(int(id)))
 }
