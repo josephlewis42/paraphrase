@@ -13,7 +13,26 @@ import (
 var (
 	projectBase string
 	db          *paraphrase.ParaphraseDb
+
+	Version string // Software version, auto-populated on build
+	Build   string // Software build date, auto-populated on build
+	Branch  string // Git branch of the build
 )
+
+func init() {
+	// if Version == "" {
+	// 	Version = "0.0.0"
+	// 	Build = "local-current"
+	// 	Branch = "local"
+	// }
+
+	RootCmd.AddCommand(DbCmdList, DbCmdGet, DbCmdAdd, CmdReport, versionCmd)
+
+	// commands for debugging
+	RootCmd.AddCommand(CmdXNorm, CmdXAdd, CmdXSim, CmdXWinnow, CmdXHash)
+
+	RootCmd.PersistentFlags().StringVarP(&projectBase, "base", "b", ".", "base project directory")
+}
 
 var RootCmd = &cobra.Command{
 	Use:   "paraphrase",
@@ -32,12 +51,19 @@ between documents`,
 	},
 }
 
-func init() {
-	RootCmd.AddCommand(DbCmdList, DbCmdGet, DbCmdAdd, CmdReport)
+var versionCmd = &cobra.Command{
+	Use:   "version",
+	Short: "prints version information to stdout",
+	Long:  `Prints the build, version and branch to stdout`,
+	Run: func(cmd *cobra.Command, args []string) {
+		fmt.Printf("Version: %s", Version)
+		fmt.Println()
+		fmt.Printf("Build: %s", Build)
+		fmt.Println()
+		fmt.Printf("Branch: %s", Branch)
+		fmt.Println()
 
-	// commands for debugging
-	RootCmd.AddCommand(CmdXNorm, CmdXAdd, CmdXSim, CmdXWinnow, CmdXHash)
-	RootCmd.PersistentFlags().StringVarP(&projectBase, "base", "b", ".", "base project directory")
+	},
 }
 
 func openDb(cmd *cobra.Command, args []string) error {
