@@ -122,7 +122,7 @@ var DbCmdGet = &cobra.Command{
 }
 
 var CmdReport = &cobra.Command{
-	Use:     "report docid [docid...]",
+	Use:     "sim docid [docid...]",
 	Short:   "Creates similarity reports for the given documents",
 	Long:    ``,
 	PreRunE: openDb,

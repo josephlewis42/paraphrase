@@ -157,6 +157,12 @@ func winnowFile(docPath string) (map[uint64]bool, error) {
 		return winnowed, err
 	}
 
+	return WinnowData(bytes)
+}
+
+func WinnowData(bytes []byte) (map[uint64]bool, error) {
+	winnowed := make(map[uint64]bool)
+
 	norm := Normalize(bytes)
 	prints := FingerprintDocument(norm, FINGERPRINT_SIZE)
 	saved := Winnow(prints, WINDOW_SIZE, true)

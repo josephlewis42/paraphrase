@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"path"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -316,6 +317,78 @@ func (db *ParaphraseDb) ReadDocumentText(id uint64) ([]byte, error) {
 	})
 
 	return decoded, err
+}
+
+func (db *ParaphraseDb) frequency(hash uint64) int {
+	docs, err := db.GetDocsByHash(hash)
+
+	if err != nil {
+		return 1
+	}
+
+	return len(docs)
+}
+
+type SearchResult struct {
+	Doc     *Document
+	Matches int
+	Rank    float64
+}
+
+type byRankTopDown []SearchResult
+
+func (a byRankTopDown) Len() int      { return len(a) }
+func (a byRankTopDown) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
+func (a byRankTopDown) Less(i, j int) bool {
+	return a[i].Rank > a[j].Rank // reverse sort
+}
+
+func (db *ParaphraseDb) SearchDoc(docId uint64, resultCount int) (*Document, []SearchResult, error) {
+	doc, err := db.GetDoc(docId)
+
+	if err != nil {
+		return doc, make([]SearchResult, 0), err
+	}
+
+	result, err := db.Search(doc.Hashes, resultCount)
+
+	return doc, result, err
+}
+
+func (db *ParaphraseDb) Search(queryHashes []uint64, resultCount int) ([]SearchResult, error) {
+	results := make([]SearchResult, 0)
+
+	query := NewBucketSet().AddAll(queryHashes)
+
+	// semi-half-brother of idf. Importance is inversely proportional to
+	// count of term
+	idf := NewBucketSet()
+	for _, hash := range queryHashes {
+		idf[hash] = 1.0 / float64(db.frequency(hash))
+	}
+
+	foundDocs := NewBucketSet()
+	for hash, _ := range query {
+		docs, _ := db.GetDocsByHash(hash)
+
+		foundDocs.AddAll(docs)
+	}
+
+	for docId, matchCount := range foundDocs {
+		doc, _ := db.GetDoc(docId)
+		docSet := NewBucketSet()
+		docSet.AddAll(doc.Hashes)
+
+		rank := docSet.Mult(idf).Sum()
+
+		result := SearchResult{doc, int(matchCount), rank}
+
+		results = append(results, result)
+	}
+
+	sort.Sort(byRankTopDown(results))
+
+	return results, nil
 }
 
 func idToKey(id uint64) []byte {

@@ -1,9 +1,11 @@
 package cmd
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"os"
 
 	"github.com/josephlewis42/paraphrase/paraphrase"
 	"github.com/spf13/cobra"
@@ -14,16 +16,24 @@ var (
 )
 
 func init() {
-	DbCmdAdd.Flags().BoolVarP(&addCmdRecursive, "recursive", "r", false, "adds files recursively from given folder(s)")
+	//DbCmdAdd.Flags().BoolVarP(&addCmdRecursive, "recursive", "r", false, "adds files recursively from given folder(s)")
 
 }
 
 var DbCmdAdd = &cobra.Command{
-	Use:     "add (-r|--recursive) [PATH]...",
-	Short:   "Add a document to the database",
-	Long:    `Adds a document with the given path to the database.`,
+	Use:   "add [PATH]...",
+	Short: "Add a document to the database or reads from stdin",
+	Long: `Adds a document with the given path to the database.
+if no paths are specified will read paths from stdin`,
 	PreRunE: openDb,
 	RunE: func(cmd *cobra.Command, args []string) error {
+
+		if len(args) == 0 {
+			scanner := bufio.NewScanner(os.Stdin)
+			for scanner.Scan() {
+				args = append(args, scanner.Text())
+			}
+		}
 
 		if len(args) == 0 {
 			return errors.New("You must supply at least one path.")
@@ -63,4 +73,9 @@ var DbCmdAdd = &cobra.Command{
 
 		return nil
 	},
+}
+
+func isDirectory(path string) (bool, error) {
+	fileInfo, err := os.Stat(path)
+	return fileInfo.IsDir(), err
 }
