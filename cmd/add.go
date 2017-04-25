@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 
 	"github.com/josephlewis42/paraphrase/paraphrase"
@@ -48,39 +47,43 @@ Use add - to read from stdin.`,
 
 		for _, fp := range args {
 			fmt.Printf("Adding: %s\n", fp)
-
-			bytes, err := ioutil.ReadFile(fp)
-
+			err := paraphrase.AddFile(fp, addCmdPrefix, db)
 			if err != nil {
 				return err
 			}
-
-			fakePath := fp
-			if addCmdPrefix != "" {
-				fakePath = addCmdPrefix + "/" + fp
-			}
-
-			doc, err := paraphrase.CreateDocumentFromData(fakePath, bytes)
-
-			if err != nil {
-				fmt.Printf("Error: %s", err)
-				fmt.Println()
-				continue
-			}
-
-			id, err := db.Insert(doc)
-
-			if err != nil {
-				return err
-			}
-
-			err = db.InsertDocumentText(id, bytes)
-			if err != nil {
-				return err
-			}
-
-			fmt.Printf("%s got id %d (internal path: %s)", fp, id, fakePath)
-			fmt.Println()
+			//
+			// bytes, err := ioutil.ReadFile(fp)
+			//
+			// if err != nil {
+			// 	return err
+			// }
+			//
+			// fakePath := fp
+			// if addCmdPrefix != "" {
+			// 	fakePath = addCmdPrefix + "/" + fp
+			// }
+			//
+			// doc, err := paraphrase.CreateDocumentFromData(fakePath, bytes)
+			//
+			// if err != nil {
+			// 	fmt.Printf("Error: %s", err)
+			// 	fmt.Println()
+			// 	continue
+			// }
+			//
+			// id, err := db.Insert(doc)
+			//
+			// if err != nil {
+			// 	return err
+			// }
+			//
+			// err = db.InsertDocumentText(id, bytes)
+			// if err != nil {
+			// 	return err
+			// }
+			//
+			// fmt.Printf("%s got id %d (internal path: %s)", fp, id, fakePath)
+			// fmt.Println()
 		}
 
 		return nil

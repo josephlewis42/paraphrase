@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/boltdb/bolt"
+	"github.com/gobwas/glob"
 	"github.com/golang/snappy"
 )
 
@@ -194,6 +195,39 @@ func (db *ParaphraseDb) GetDocsByHash(hash uint64) ([]uint64, error) {
 	})
 
 	return keys, err
+}
+
+func (db *ParaphraseDb) GetDocsMatching(pattern string, limit int) ([]Document, error) {
+	docs := make([]Document, 0)
+
+	globby, err := glob.Compile(pattern)
+	if err != nil {
+		return docs, err
+	}
+
+	err = db.db.View(func(tx *bolt.Tx) error {
+		// Assume bucket exists and has keys
+		c := tx.Bucket([]byte(DocumentBucket)).Cursor()
+
+		for k, v := c.First(); k != nil; k, v = c.Next() {
+			var doc Document
+			err := json.Unmarshal(v, &doc)
+			if err != nil {
+				return err
+			}
+			if globby.Match(doc.Path) {
+				docs = append(docs, doc)
+			}
+
+			if len(docs) == limit {
+				break
+			}
+		}
+
+		return nil
+	})
+
+	return docs, err
 }
 
 func (db *ParaphraseDb) scanDocs(prefix []byte, limit int) ([]Document, error) {

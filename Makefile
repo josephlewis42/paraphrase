@@ -16,7 +16,7 @@ LIN=env GOOS=linux GOARCH=amd64
 
 all: paraphrase
 
-paraphrase: outputdir
+paraphrase: dependencies outputdir
 	$(GO) build $(GOFLAGS) -o $(OUTDIR)/paraphrase main.go
 	#$(WIN) $(GO) build $(GOFLAGS) -o $(OUTDIR)/paraphrase.exe main.go
 
@@ -27,6 +27,9 @@ version:
 
 clean:
 	rm -rf $(OUTDIR)
+
+dependencies:
+	$(GO) get ./...
 
 outputdir:
 	mkdir -p $(OUTDIR)

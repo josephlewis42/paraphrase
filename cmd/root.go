@@ -26,7 +26,7 @@ func init() {
 	// 	Branch = "local"
 	// }
 
-	RootCmd.AddCommand(DbCmdList, DbCmdGet, DbCmdAdd, CmdReport, versionCmd)
+	RootCmd.AddCommand(DbCmdGet, DbCmdAdd, CmdReport, versionCmd)
 	RootCmd.AddCommand(cmdDocText)
 
 	// commands for debugging
@@ -75,20 +75,6 @@ func openDb(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
-}
-
-var DbCmdList = &cobra.Command{
-	Use:     "list",
-	Short:   "List the ids of all documents",
-	Long:    `List the ids of all documents`,
-	PreRunE: openDb,
-	Run: func(cmd *cobra.Command, args []string) {
-		docs, _ := db.DocList()
-
-		for _, doc := range docs {
-			fmt.Println(doc)
-		}
-	},
 }
 
 var DbCmdGet = &cobra.Command{
