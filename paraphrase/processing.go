@@ -199,9 +199,9 @@ func Similarity(doc1, doc2 string) {
 
 }
 
-func CreateDocumentFromFile(path string) (*Document, error) {
+func CreateDocumentFromData(path string, data []byte) (*Document, error) {
 
-	hashesMap, err := winnowFile(path)
+	hashesMap, err := WinnowData(data)
 
 	if err != nil {
 		return nil, err

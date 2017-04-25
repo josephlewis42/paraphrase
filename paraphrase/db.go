@@ -388,6 +388,8 @@ func (db *ParaphraseDb) Search(queryHashes []uint64, resultCount int) ([]SearchR
 
 	sort.Sort(byRankTopDown(results))
 
+	results = results[0:min(resultCount, len(results))]
+
 	return results, nil
 }
 

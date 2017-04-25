@@ -30,7 +30,7 @@ func init() {
 	RootCmd.AddCommand(cmdDocText)
 
 	// commands for debugging
-	RootCmd.AddCommand(CmdXNorm, CmdXAdd, CmdXSim, CmdXWinnow, CmdXHash)
+	RootCmd.AddCommand(CmdXNorm, CmdXSim, CmdXWinnow, CmdXHash)
 
 	RootCmd.PersistentFlags().StringVarP(&projectBase, "base", "b", ".", "base project directory")
 }

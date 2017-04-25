@@ -8,8 +8,16 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var (
+	resultCount int
+)
+
 func init() {
 	RootCmd.AddCommand(cmdSearchId, cmdSearchText)
+
+	cmdSearchId.Flags().IntVarP(&resultCount, "num", "n", 100, "number of search results")
+	cmdSearchText.Flags().IntVarP(&resultCount, "num", "n", 100, "number of search results")
+
 }
 
 var cmdSearchId = &cobra.Command{
@@ -26,7 +34,7 @@ var cmdSearchId = &cobra.Command{
 		}
 
 		for _, id := range docIds {
-			doc, matches, err := db.SearchDoc(id, 1000)
+			doc, matches, err := db.SearchDoc(id, resultCount)
 
 			if err != nil {
 				return err
@@ -69,7 +77,7 @@ length specified when setting up paraphrase.`,
 			hashes = append(hashes, print.Fingerprint)
 		}
 
-		matches, err := db.Search(hashes, 1000)
+		matches, err := db.Search(hashes, resultCount)
 		if err != nil {
 			return err
 		}

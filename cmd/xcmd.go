@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -66,37 +65,6 @@ var CmdXSim = &cobra.Command{
 		}
 
 		paraphrase.Similarity(args[0], args[1])
-	},
-}
-
-var CmdXAdd = &cobra.Command{
-	Use:   "xadd path [path...]",
-	Short: "(read only, debug) Dry run of an add.",
-	Long: `Prepeares a document for insertion, but prints it out rather than
-adding it to the database.`,
-	Run: func(cmd *cobra.Command, args []string) {
-
-		if len(args) == 0 {
-			fmt.Println("You must supply at least one document.")
-			fmt.Println()
-			cmd.Usage()
-			return
-		}
-
-		for _, path := range args {
-			fmt.Printf("Preparing: %s\n", path)
-
-			doc, err := paraphrase.CreateDocumentFromFile(path)
-
-			if err != nil {
-				fmt.Printf("Error: %s", err)
-				continue
-			}
-
-			out, _ := json.MarshalIndent(doc, "", "    ")
-			fmt.Println(string(out))
-		}
-
 	},
 }
 

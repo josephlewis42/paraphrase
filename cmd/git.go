@@ -6,40 +6,34 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path"
 
 	"github.com/josephlewis42/paraphrase/paraphrase"
 	"github.com/spf13/cobra"
 )
 
 var (
-	addCmdPrefix string
+	gitCmdPrefix string
 )
 
 func init() {
 	//DbCmdAdd.Flags().BoolVarP(&addCmdRecursive, "recursive", "r", false, "adds files recursively from given folder(s)")
-	DbCmdAdd.Flags().StringVar(&addCmdPrefix, "prefix", "", "adds a prefix to the loaded files")
-
+	DbCmdGit.Flags().StringVar(&gitCmdPrefix, "prefix", "", "adds a prefix to the loaded files")
 }
 
-var DbCmdAdd = &cobra.Command{
-	Use:   "add (-|[PATH]...)",
-	Short: "Add a document to the database or reads from stdin (use -)",
+var DbCmdGit = &cobra.Command{
+	Use:   "git add [URL]",
+	Short: "Add a document to the database or reads from stdin",
 	Long: `Adds a document with the given path to the database.
-Use add - to read from stdin.`,
+if no paths are specified will read paths from stdin`,
 	PreRunE: openDb,
 	RunE: func(cmd *cobra.Command, args []string) error {
 
 		if len(args) == 0 {
-			return errors.New("You must specify at least one file or - to read from stdin")
-		}
-
-		if len(args) == 1 && args[0] == "-" {
-
 			scanner := bufio.NewScanner(os.Stdin)
 			for scanner.Scan() {
 				args = append(args, scanner.Text())
 			}
-			args = args[1:]
 		}
 
 		if len(args) == 0 {
@@ -55,10 +49,7 @@ Use add - to read from stdin.`,
 				return err
 			}
 
-			fakePath := fp
-			if addCmdPrefix != "" {
-				fakePath = addCmdPrefix + "/" + fp
-			}
+			fakePath := path.Join(addCmdPrefix, fp)
 
 			doc, err := paraphrase.CreateDocumentFromData(fakePath, bytes)
 
@@ -79,15 +70,10 @@ Use add - to read from stdin.`,
 				return err
 			}
 
-			fmt.Printf("%s got id %d (internal path: %s)", fp, id, fakePath)
+			fmt.Printf("%s got id %d", fp, id)
 			fmt.Println()
 		}
 
 		return nil
 	},
-}
-
-func isDirectory(path string) (bool, error) {
-	fileInfo, err := os.Stat(path)
-	return fileInfo.IsDir(), err
 }
