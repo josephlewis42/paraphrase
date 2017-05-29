@@ -3,7 +3,6 @@ package cmd
 import (
 	"errors"
 
-	"github.com/josephlewis42/paraphrase/paraphrase"
 	"github.com/spf13/cobra"
 )
 
@@ -18,7 +17,6 @@ func init() {
 	//DbCmdAdd.Flags().BoolVarP(&addCmdRecursive, "recursive", "r", false, "adds files recursively from given folder(s)")
 	DbCmdGit.Flags().StringVar(&gitCmdPrefix, "prefix", "", "adds a prefix to the loaded files")
 	DbCmdGit.Flags().StringVar(&gitCmdMatcher, "match", "**", "which files to import from the source, a glob supporting ** and *")
-
 }
 
 var DbCmdGit = &cobra.Command{
@@ -32,7 +30,8 @@ var DbCmdGit = &cobra.Command{
 			return errors.New("You must specify one git URL")
 		}
 
-		return paraphrase.Git(args[0], gitCmdMatcher, gitCmdPrefix, db)
+		return nil
+		// return paraphrase.Git(args[0], gitCmdMatcher, gitCmdPrefix, db)
 		//
 		//
 		// for _, fp := range args {

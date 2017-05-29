@@ -1,23 +1,30 @@
 package cmd
 
 import (
-	"bufio"
 	"errors"
-	"fmt"
+	"log"
 	"os"
+	"path/filepath"
+	"time"
 
-	"github.com/josephlewis42/paraphrase/paraphrase"
+	"github.com/josephlewis42/paraphrase/paraphrase/provider"
 	"github.com/spf13/cobra"
 )
 
+const (
+	WILDCARD = "*"
+)
+
 var (
-	addCmdPrefix string
+	addCmdNamespace = time.Now().UTC().Format(time.RFC3339)
+	addCmdDryRun    bool
+	addCmdMatch     string
 )
 
 func init() {
-	//DbCmdAdd.Flags().BoolVarP(&addCmdRecursive, "recursive", "r", false, "adds files recursively from given folder(s)")
-	DbCmdAdd.Flags().StringVar(&addCmdPrefix, "prefix", "", "adds a prefix to the loaded files")
-
+	DbCmdAdd.Flags().StringVar(&addCmdNamespace, "namespace", addCmdNamespace, "sets the namespace of the loaded files, by default this will be a timestamp")
+	DbCmdAdd.Flags().BoolVar(&addCmdDryRun, "dry", false, "list files to add rather than adding them")
+	DbCmdAdd.Flags().StringVarP(&addCmdMatch, "match", "m", WILDCARD, "only add items matching the given glob")
 }
 
 var DbCmdAdd = &cobra.Command{
@@ -26,68 +33,55 @@ var DbCmdAdd = &cobra.Command{
 	Long: `Adds a document with the given path to the database.
 Use add - to read from stdin.`,
 	PreRunE: openDb,
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(cmd *cobra.Command, args []string) (err error) {
 
 		if len(args) == 0 {
-			return errors.New("You must specify at least one file or - to read from stdin")
+			return errors.New("You must specify at least one file/directory or - to read from stdin")
 		}
+
+		log.Printf("Using namespace %s\n", addCmdNamespace)
+
+		var mainProducer provider.DocumentProducer
 
 		if len(args) == 1 && args[0] == "-" {
-
-			scanner := bufio.NewScanner(os.Stdin)
-			for scanner.Scan() {
-				args = append(args, scanner.Text())
-			}
-			args = args[1:]
-		}
-
-		if len(args) == 0 {
-			return errors.New("You must supply at least one path.")
-		}
-
-		for _, fp := range args {
-			fmt.Printf("Adding: %s\n", fp)
-			err := paraphrase.AddFile(fp, addCmdPrefix, db)
+			mainProducer, err = provider.NewFileListProducer(addCmdNamespace, os.Stdin)
 			if err != nil {
 				return err
 			}
-			//
-			// bytes, err := ioutil.ReadFile(fp)
-			//
-			// if err != nil {
-			// 	return err
-			// }
-			//
-			// fakePath := fp
-			// if addCmdPrefix != "" {
-			// 	fakePath = addCmdPrefix + "/" + fp
-			// }
-			//
-			// doc, err := paraphrase.CreateDocumentFromData(fakePath, bytes)
-			//
-			// if err != nil {
-			// 	fmt.Printf("Error: %s", err)
-			// 	fmt.Println()
-			// 	continue
-			// }
-			//
-			// id, err := db.Insert(doc)
-			//
-			// if err != nil {
-			// 	return err
-			// }
-			//
-			// err = db.InsertDocumentText(id, bytes)
-			// if err != nil {
-			// 	return err
-			// }
-			//
-			// fmt.Printf("%s got id %d (internal path: %s)", fp, id, fakePath)
-			// fmt.Println()
+
+		} else {
+			for _, path := range args {
+				absPath, err := filepath.Abs(path)
+				if err != nil {
+					return err
+				}
+
+				tmp := provider.NewTreeWalkerProducer(absPath, addCmdNamespace, true, len(absPath))
+
+				mainProducer = provider.NewJoinerProducer(mainProducer, tmp)
+			}
 		}
+
+		if addCmdMatch != WILDCARD {
+			mainProducer, err = provider.NewFilterWrapper(addCmdMatch, mainProducer)
+
+			if err != nil {
+				return err
+			}
+		}
+
+		if addCmdDryRun {
+			mainProducer = provider.NewDummyProducer(mainProducer, os.Stdout)
+		}
+
+		db.AddDocuments(mainProducer)
 
 		return nil
 	},
+}
+
+func currentTime() string {
+	return time.Now().UTC().Format(time.RFC3339)
 }
 
 func isDirectory(path string) (bool, error) {

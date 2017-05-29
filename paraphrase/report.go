@@ -1,93 +1,128 @@
 package paraphrase
 
-type BucketSet map[uint64]float64
+import (
+	"io"
+	"log"
+	"os"
+	"strings"
+	"text/template"
+	"time"
+)
 
-func NewBucketSet() BucketSet {
-	return make(BucketSet)
-}
+// Writes the documents in fashion suitable for displaying on-screen
+func FormatDocuments(w io.Writer, docs []Document, templateFormat string, shortSha bool) {
+	if templateFormat == "" {
+		WriteDocuments(w, docs, shortSha)
+		return
+	}
 
-func (hs BucketSet) AddAll(elements []uint64) BucketSet {
+	for _, doc := range docs {
+		err := RenderDocument(templateFormat, &doc)
 
-	for _, element := range elements {
-		val, ok := hs[element]
-
-		if !ok {
-			hs[element] = 1
-		} else {
-			hs[element] = val + 1
+		if err != nil {
+			log.Println(err)
+			break
 		}
-	}
 
-	return hs
+	}
 }
 
-func (hs BucketSet) Intersect(other BucketSet) BucketSet {
-	intersection := NewBucketSet()
+func RenderDocument(templateFormat string, doc *Document) error {
 
-	for key, val := range hs {
-		if _, ok := other[key]; ok {
-			intersection[key] = val
-		}
+	funcMap := template.FuncMap{
+		// The name "title" is what the function will be called in the template text.
+		"body":      func() string { return "BODY_NOT_AVAILABLE_IN_THIS_TEMPLATE" },
+		"path":      func() string { return doc.Path },
+		"namespace": func() string { return doc.Namespace },
+		"id":        func() string { return doc.Id },
+		"sha1":      func() string { return doc.Sha1 },
+		"date":      func() time.Time { return doc.IndexDate },
+
+		"crlf": func() string { return "\r\n" },
+		"tab":  func() string { return "\t" },
+
+		"head":   headFunc,
+		"prefix": prefixLines,
+		"first":  firstFunc,
+		"repeat": repeatText,
 	}
 
-	return intersection
-}
-
-func (hs BucketSet) Union(other BucketSet) BucketSet {
-	union := NewBucketSet()
-
-	for key, val := range other {
-		union[key] = val
+	tmpl, err := template.New("DocumentTemplate").Funcs(funcMap).Parse(templateFormat)
+	if err != nil {
+		return err
 	}
 
-	for key, val := range hs {
-		union[key] = val
+	// Run the template to verify the output.
+	return tmpl.Execute(os.Stdout, doc)
+}
+
+// prefix all lines with the given prefix.
+func prefixLines(prefix, lines string) string {
+	return prefix + strings.Replace(lines, "\n", "\n"+prefix, -1)
+}
+
+// gets the first lineCount number of lines of the given text.
+func headFunc(lineCount int, text string) string {
+	if lineCount <= 0 {
+		return ""
 	}
 
-	return union
+	lines := strings.Split(text, "\n")
+
+	return strings.Join(lines[:min(lineCount, len(lines))], "\n")
 }
 
-func (hs BucketSet) GetOrDefault(key uint64, defaultVal float64) float64 {
-	val, ok := hs[key]
-
-	if ok {
-		return val
+// gets the first N bytes of the given text
+func firstFunc(n int, text string) string {
+	if n <= 0 {
+		return ""
 	}
 
-	return defaultVal
+	return text[:min(n, len(text))]
 }
 
-func (hs BucketSet) Mult(other BucketSet) BucketSet {
-	output := hs.Union(other)
+// repeats the text n times
+func repeatText(n int, text string) string {
+	out := ""
 
-	for key, _ := range output {
-		output[key] = hs.GetOrDefault(key, 0.0) * other.GetOrDefault(key, 0.0)
+	for ; n > 0; n-- {
+		out += text
 	}
 
-	return output
+	return out
 }
 
-func (hs BucketSet) Sum() float64 {
-	sum := 0.0
-
-	for _, val := range hs {
-		sum += val
+func min(a, b int) int {
+	if a < b {
+		return a
 	}
-
-	return sum
+	return b
 }
 
-func (hs BucketSet) TfIdf() float64 {
-	var tfidf float64
-	tfidf = 1.0
+//
+//
+// Variables:
+//
+// 	{{body}} The raw text of the content
+// 	{{path}} The internal path of the document, looks like "bar/bazz"
+// 	{{namespace}} The starting namespace of the document like "foo"
+// 	{{id}} The id of the document
+// 	{{sha1}} SHA1 of the body
+//
+// Formatting Functions:
+//
+// 	{{VARIABLE | prefixlines ">"}} Prefixes all lines with the given text
+// 	{{VARIABLE | head 5}} Only allow the first five lines
+// 	{{VARIABLE | first 1024}} Get the first N bytes
+// 	{{repeat "=" 10}} Prints the given x times e.g. "=========="
+//
+//
+// "crlf": func() string { return "\r\n" },
+// "tab":  func() string { return "\t" },
 
-	for _, elemFreq := range hs {
-		tfidf *= 1.0 / float64(elemFreq)
-	}
-
-	return tfidf
-}
-
-func (hs BucketSet) OverlapProportion(other BucketSet) float64 {
-	return float64(len(hs.Union(other))) / float64(len(hs))
-}
+// Conversion Functions:
+//
+// 	{{VARIABLE | html}} Escape HTML characters
+// 	{{VARIABLE | js}} Escape JavaScript characters
+// 	{{VARIABLE | urlquery}} Escape for embedding in URLs
+//

@@ -1,18 +1,16 @@
 package paraphrase
 
 import (
-	"bytes"
-	"encoding/json"
-	"errors"
 	"fmt"
+	"log"
 	"path"
-	"sort"
-	"strconv"
+	"regexp"
 	"strings"
 
-	"github.com/boltdb/bolt"
-	"github.com/gobwas/glob"
-	"github.com/golang/snappy"
+	"github.com/asdine/storm"
+	"github.com/asdine/storm/q"
+	"github.com/josephlewis42/paraphrase/paraphrase/provider"
+	"github.com/josephlewis42/paraphrase/paraphrase/snappyjson"
 )
 
 const (
@@ -24,12 +22,11 @@ const (
 	MinIndex               = "00000000000000000000"
 	MaxIndex               = "99999999999999999999"
 	CurrentSettingsVersion = 1 // the version of the settings file, won't match the version of paraphrase
+	sha1HexLength          = len("da39a3ee5e6b4b0d3255bfef95601890afd80709")
 )
 
 type Settings struct {
 	Version         int
-	SaveDocuments   bool
-	ImportPrefix    string
 	WindowSize      int
 	FingerprintSize int
 	RobustHash      bool
@@ -39,8 +36,6 @@ func NewDefaultSettings() Settings {
 	var settings Settings
 
 	settings.Version = CurrentSettingsVersion
-	settings.SaveDocuments = true
-	settings.ImportPrefix = ""
 	settings.WindowSize = 10
 	settings.FingerprintSize = 10
 	settings.RobustHash = true
@@ -48,18 +43,10 @@ func NewDefaultSettings() Settings {
 	return settings
 }
 
-type Document struct {
-	Id        uint64 // the ID assigned by the bolt db
-	IndexDate string
-	Path      string
-	Name      string
-	Hashes    []uint64
-	Meta      map[string]string
-}
-
 type ParaphraseDb struct {
 	directory string
-	db        *bolt.DB
+	settings  Settings
+	db        *storm.DB
 }
 
 // Open or create a new paraphrase database in the given directory
@@ -69,16 +56,15 @@ func Open(directory string) (*ParaphraseDb, error) {
 	var err error
 
 	paraphrase.directory = directory
+	paraphrase.settings = NewDefaultSettings()
 
 	// Open the my.db data file in your current directory.
 	// It will be created if it doesn't exist.
 	dbPath := path.Join(directory, DbName)
 
-	// if _, err := os.Stat(dbPath); err != nil {
-	// 	return nil, errors.New("Could not open the paraphrase db, run paraphrase init to set it up")
-	// }
-
-	paraphrase.db, err = bolt.Open(dbPath, 0600, nil)
+	// paraphrase.db, err = storm.Open(dbPath, storm.Codec(snappyjson.Codec))
+	paraphrase.db, err = storm.Open(dbPath, storm.Codec(snappyjson.MsgpackCodec))
+	// paraphrase.db, err = storm.Open(dbPath)
 	if err != nil {
 		return nil, err
 	}
@@ -91,342 +77,153 @@ func Open(directory string) (*ParaphraseDb, error) {
 	return &paraphrase, nil
 }
 
-func (db *ParaphraseDb) init() error {
-	return db.db.Update(func(tx *bolt.Tx) error {
+func (p *ParaphraseDb) init() error {
 
-		buckets := []string{DocumentBucket, IndexBucket, SettingsBucket, FileBucket}
+	err := p.db.Init(&Document{})
+	if err != nil {
+		return err
+	}
 
-		for _, bucket := range buckets {
-			_, err := tx.CreateBucketIfNotExists([]byte(bucket))
-			if err != nil {
-				return fmt.Errorf("create bucket: %s", err)
-			}
+	err = p.db.Init(&DocumentData{})
+
+	return err
+}
+
+func (p *ParaphraseDb) Close() error {
+	return p.db.Close()
+}
+
+func (p *ParaphraseDb) AddDocuments(producer provider.DocumentProducer) (added []Document, ok bool) {
+	added = make([]Document, 0)
+	ok = true
+
+	for key := range producer {
+		log.Printf("Adding %s %s\n", key.Namespace(), key.Path())
+		body, err := key.Body()
+
+		if err != nil {
+			log.Printf("Error getting body of %s: %s", key.Path(), err)
+			ok = false
+			continue
 		}
 
-		return nil
-	})
+		doc, err := p.CreateDocument(key.Path(), key.Namespace(), body)
+		if err != nil {
+			log.Printf("Error saving document %s: %s", key.Path(), err)
+			ok = false
+			continue
+		}
+
+		added = append(added, *doc)
+	}
+
+	return added, ok
 }
 
-func (db *ParaphraseDb) Close() error {
-	return db.db.Close()
-}
+func (p *ParaphraseDb) CreateDocument(path, namespace string, body []byte) (*Document, error) {
+	var err error
 
-func (db *ParaphraseDb) DocList() ([]string, error) {
+	doc, docData := NewDocument(path, namespace, body)
 
-	docs := make([]string, 0)
-
-	db.db.View(func(tx *bolt.Tx) error {
-		// Assume bucket exists and has keys
-		b := tx.Bucket([]byte(DocumentBucket))
-
-		b.ForEach(func(k, v []byte) error {
-			docs = append(docs, string(k))
-			return nil
-		})
-		return nil
-	})
-
-	return docs, nil
-}
-
-func (db *ParaphraseDb) GetDoc(id uint64) (*Document, error) {
-
-	docs, err := db.scanDocs(idToKey(id), 1)
+	// generate hashes
+	doc.Hashes, err = p.WinnowData(body)
 
 	if err != nil {
 		return nil, err
 	}
 
-	if len(docs) == 0 {
-		return nil, errors.New("No document found with the given id")
-	}
-
-	return &docs[0], nil
-}
-
-func (db *ParaphraseDb) GetDocsByPath(pathPrefix string) ([]Document, error) {
-	docs := make([]Document, 0)
-
-	err := db.db.View(func(tx *bolt.Tx) error {
-		// Assume bucket exists and has keys
-		b := tx.Bucket([]byte(DocumentBucket))
-
-		return b.ForEach(func(k, v []byte) error {
-			key := string(k)
-			docPath := key[len(MinIndex)+1:]
-
-			if strings.HasPrefix(docPath, pathPrefix) {
-				var doc Document
-				err := json.Unmarshal(v, &doc)
-				if err != nil {
-					return err
-				}
-				docs = append(docs, doc)
-			}
-			return nil
-		})
-	})
-
-	return docs, err
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-
-	return b
-}
-
-func (db *ParaphraseDb) GetDocsByHash(hash uint64) ([]uint64, error) {
-	keys := make([]uint64, 0)
-
-	err := db.db.View(func(tx *bolt.Tx) error {
-		intBucket := tx.Bucket([]byte(IndexBucket))
-
-		hashb := []byte(strconv.Itoa(int(hash)))
-		val := intBucket.Get(hashb)
-
-		if val != nil {
-			json.Unmarshal(val, &keys)
-		}
-
-		return nil
-	})
-
-	return keys, err
-}
-
-func (db *ParaphraseDb) GetDocsMatching(pattern string, limit int) ([]Document, error) {
-	docs := make([]Document, 0)
-
-	globby, err := glob.Compile(pattern)
+	tx, err := p.db.Begin(true)
 	if err != nil {
-		return docs, err
+		return nil, err
 	}
+	defer tx.Rollback()
 
-	err = db.db.View(func(tx *bolt.Tx) error {
-		// Assume bucket exists and has keys
-		c := tx.Bucket([]byte(DocumentBucket)).Cursor()
+	// TODO save hashes to db
 
-		for k, v := c.First(); k != nil; k, v = c.Next() {
-			var doc Document
-			err := json.Unmarshal(v, &doc)
-			if err != nil {
-				return err
-			}
-			if globby.Match(doc.Path) {
-				docs = append(docs, doc)
-			}
-
-			if len(docs) == limit {
-				break
-			}
-		}
-
-		return nil
-	})
-
-	return docs, err
-}
-
-func (db *ParaphraseDb) scanDocs(prefix []byte, limit int) ([]Document, error) {
-	docs := make([]Document, 0)
-
-	if limit <= 0 {
-		return docs, nil
-	}
-
-	err := db.db.View(func(tx *bolt.Tx) error {
-
-		// Assume bucket exists and has keys
-		c := tx.Bucket([]byte(DocumentBucket)).Cursor()
-
-		for k, v := c.Seek(prefix); k != nil && bytes.HasPrefix(k, prefix); k, v = c.Next() {
-			var doc Document
-			err := json.Unmarshal(v, &doc)
-
-			if err != nil {
-				return err
-			}
-
-			docs = append(docs, doc)
-			return nil
-		}
-
-		return nil
-	})
-
-	return docs, err
-}
-
-func (db *ParaphraseDb) Insert(doc *Document) (uint64, error) {
-	var id uint64
-	var err error
-
-	err = db.db.Update(func(tx *bolt.Tx) error {
-
-		docBucket := tx.Bucket([]byte(DocumentBucket))
-		intBucket := tx.Bucket([]byte(IndexBucket))
-
-		id, err = docBucket.NextSequence()
-
-		if err != nil {
-			return fmt.Errorf("error getting next sequence: %s", err)
-		}
-
-		doc.Id = id
-
-		docHash := idToKey(doc.Id)
-
-		buf, err := json.Marshal(doc)
-		if err != nil {
-			return err
-		}
-
-		docBucket.Put(docHash, buf)
-
-		if err != nil {
-			return fmt.Errorf("create bucket: %s", err)
-		}
-
-		for _, hash := range doc.Hashes {
-
-			hashb := []byte(strconv.Itoa(int(hash)))
-			val := intBucket.Get(hashb)
-
-			keys := make([]uint64, 0)
-			if val != nil {
-				json.Unmarshal(val, &keys)
-			}
-
-			keys = append(keys, id)
-			val, err = json.Marshal(keys)
-
-			if err != nil {
-				return fmt.Errorf("error serializing: %s", err)
-			}
-
-			err := intBucket.Put(hashb, val)
-
-			if err != nil {
-				return fmt.Errorf("Error storing data: %s", err)
-			}
-		}
-
-		return nil
-	})
-
-	return id, err
-}
-
-func (db *ParaphraseDb) InsertDocumentText(id uint64, doc []byte) error {
-	return db.db.Update(func(tx *bolt.Tx) error {
-
-		bucket := tx.Bucket([]byte(FileBucket))
-		encoded := snappy.Encode(nil, doc)
-		docHash := idToKey(id)
-
-		return bucket.Put(docHash, encoded)
-	})
-}
-
-func (db *ParaphraseDb) ReadDocumentText(id uint64) ([]byte, error) {
-	decoded := make([]byte, 0)
-	var err error
-
-	err = db.db.View(func(tx *bolt.Tx) error {
-
-		bucket := tx.Bucket([]byte(FileBucket))
-		docHash := idToKey(id)
-		encoded := bucket.Get(docHash)
-
-		if len(encoded) == 0 {
-			return errors.New("No such document id")
-		}
-
-		decoded, err = snappy.Decode(nil, encoded)
-		return err
-
-	})
-
-	return decoded, err
-}
-
-func (db *ParaphraseDb) frequency(hash uint64) int {
-	docs, err := db.GetDocsByHash(hash)
-
+	err = tx.Save(doc)
 	if err != nil {
-		return 1
+		return nil, err
 	}
 
-	return len(docs)
-}
-
-type SearchResult struct {
-	Doc     *Document
-	Matches int
-	Rank    float64
-}
-
-type byRankTopDown []SearchResult
-
-func (a byRankTopDown) Len() int      { return len(a) }
-func (a byRankTopDown) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
-func (a byRankTopDown) Less(i, j int) bool {
-	return a[i].Rank > a[j].Rank // reverse sort
-}
-
-func (db *ParaphraseDb) SearchDoc(docId uint64, resultCount int) (*Document, []SearchResult, error) {
-	doc, err := db.GetDoc(docId)
-
+	err = tx.Save(docData)
 	if err != nil {
-		return doc, make([]SearchResult, 0), err
+		return nil, err
 	}
 
-	result, err := db.Search(doc.Hashes, resultCount)
-
-	return doc, result, err
+	return doc, tx.Commit()
 }
 
-func (db *ParaphraseDb) Search(queryHashes []uint64, resultCount int) ([]SearchResult, error) {
-	results := make([]SearchResult, 0)
-
-	query := NewBucketSet().AddAll(queryHashes)
-
-	// semi-half-brother of idf. Importance is inversely proportional to
-	// count of term
-	idf := NewBucketSet()
-	for _, hash := range queryHashes {
-		idf[hash] = 1.0 / float64(db.frequency(hash))
-	}
-
-	foundDocs := NewBucketSet()
-	for hash, _ := range query {
-		docs, _ := db.GetDocsByHash(hash)
-
-		foundDocs.AddAll(docs)
-	}
-
-	for docId, matchCount := range foundDocs {
-		doc, _ := db.GetDoc(docId)
-		docSet := NewBucketSet()
-		docSet.AddAll(doc.Hashes)
-
-		rank := docSet.Mult(idf).Sum()
-
-		result := SearchResult{doc, int(matchCount), rank}
-
-		results = append(results, result)
-	}
-
-	sort.Sort(byRankTopDown(results))
-
-	results = results[0:min(resultCount, len(results))]
-
-	return results, nil
+func (p *ParaphraseDb) CountDocuments() (int, error) {
+	return p.db.Count(&Document{})
 }
 
-func idToKey(id uint64) []byte {
-	return []byte(strconv.Itoa(int(id)))
+// FindDocumentsLike finds documents like the one given.
+// * Ids are matched exactly,
+// * SHA1s are matched as a prefix (you can give the n characters only)
+// * Namespaces are searched like globs
+// * Paths are searched like globs
+func (p *ParaphraseDb) FindDocumentsLike(query Document) (results []Document, err error) {
+	var matchers []q.Matcher
+
+	if query.Id != "" {
+		matchers = append(matchers, q.Eq("Id", query.Id))
+	}
+
+	if query.Sha1 != "" {
+		matchers = append(matchers, q.Re("Sha1", "^"+query.Sha1+".*"))
+	}
+
+	if query.Namespace != "" {
+		matchers = append(matchers, q.Re("Namespace", GlobToRegexStr(query.Namespace)))
+	}
+
+	if query.Path != "" {
+		matchers = append(matchers, q.Re("Path", GlobToRegexStr(query.Path)))
+	}
+
+	err = p.db.Select(matchers...).Find(&results)
+
+	return results, err
+}
+
+func (p *ParaphraseDb) FindDocumentById(id string) (*Document, error) {
+	var doc Document
+	err := p.db.One("Id", id, &doc)
+	return &doc, err
+}
+
+func (p *ParaphraseDb) FindDocumentsByIds(ids ...string) (results []Document, err error) {
+	err = p.db.Select(q.In("Id", ids)).Find(&results)
+	return results, err
+}
+
+func (p *ParaphraseDb) FindDocumentsBySha1(sha1 string) (results []Document, err error) {
+
+	if len(sha1) == sha1HexLength {
+		err = p.db.Find("Sha1", sha1, &results)
+
+	} else {
+		err = p.db.Select(q.Re("Sha1", "^"+sha1+".*")).Find(&results)
+	}
+
+	return results, err
+}
+
+func (p *ParaphraseDb) FindDocumentDataById(id string) (*DocumentData, error) {
+	var doc DocumentData
+	err := p.db.One("Id", id, &doc)
+	return &doc, err
+}
+
+// GlobToRegexStr converts a basic glob string to a regex
+// e.g. "foo*bar.java" to "^foo.*bar\.java$"
+// everything that isn't a * gets escaped
+func GlobToRegexStr(glob string) string {
+	split := strings.Split(glob, "*")
+
+	for i, elem := range split {
+		split[i] = regexp.QuoteMeta(elem)
+	}
+
+	return "^" + strings.Join(split, ".*") + "$"
 }

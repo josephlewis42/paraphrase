@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strconv"
 
 	"github.com/josephlewis42/paraphrase/paraphrase"
 	"github.com/spf13/cobra"
@@ -14,23 +13,19 @@ var (
 	projectBase string
 	db          *paraphrase.ParaphraseDb
 
-	Version string // Software version, auto-populated on build
-	Build   string // Software build date, auto-populated on build
-	Branch  string // Git branch of the build
+	Version      string // Software version, auto-populated on build
+	Build        string // Software build date, auto-populated on build
+	Branch       string // Git branch of the build
+	showAllFiles bool
+	addMatcher   string
 )
 
 func init() {
-	// if Version == "" {
-	// 	Version = "0.0.0"
-	// 	Build = "local-current"
-	// 	Branch = "local"
-	// }
-
-	RootCmd.AddCommand(DbCmdGet, DbCmdAdd, CmdReport, versionCmd)
+	RootCmd.AddCommand(DbCmdGet, DbCmdAdd, versionCmd)
 	RootCmd.AddCommand(cmdDocText)
 
 	// commands for debugging
-	RootCmd.AddCommand(CmdXNorm, CmdXSim, CmdXWinnow, CmdXHash)
+	// RootCmd.AddCommand(CmdXNorm, CmdXSim, CmdXWinnow, CmdXHash)
 
 	RootCmd.PersistentFlags().StringVarP(&projectBase, "base", "b", ".", "base project directory")
 }
@@ -90,10 +85,10 @@ var DbCmdGet = &cobra.Command{
 		}
 
 		for _, id := range docIds {
-			doc, err := db.GetDoc(id)
+			doc, err := db.FindDocumentById(id)
 
 			if err != nil {
-				fmt.Printf("Error document %d does not exist.\n", id)
+				fmt.Printf("Error document %s does not exist.\n", id)
 				continue
 			}
 
@@ -101,26 +96,6 @@ var DbCmdGet = &cobra.Command{
 
 			fmt.Println(string(b))
 
-		}
-
-		return nil
-	},
-}
-
-var CmdReport = &cobra.Command{
-	Use:     "sim docid [docid...]",
-	Short:   "Creates similarity reports for the given documents",
-	Long:    ``,
-	PreRunE: openDb,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		docIds, err := parseDocIds(args, 1)
-
-		if err != nil {
-			return err
-		}
-
-		for _, id := range docIds {
-			paraphrase.Report(id, db)
 		}
 
 		return nil
@@ -140,13 +115,13 @@ var cmdDocText = &cobra.Command{
 		}
 
 		for _, id := range docIds {
-			text, err := db.ReadDocumentText(id)
+			dd, err := db.FindDocumentDataById(id)
 
 			if err != nil {
 				return err
 			}
 
-			fmt.Println(string(text))
+			fmt.Println(string(dd.Body))
 		}
 
 		return nil
@@ -158,30 +133,15 @@ var cmdDocText = &cobra.Command{
 // so if only one element is bad, the rest will still be returned
 // if the total number of successfully parse elements is less than numRequired
 // an appropriate error will be returned
-func parseDocIds(args []string, numRequired int) ([]uint64, error) {
-	ids := make([]uint64, 0)
+func parseDocIds(args []string, numRequired int) ([]string, error) {
 
-	var outerr error
-
-	for _, docid := range args {
-
-		id, err := strconv.Atoi(docid)
-
-		if id < 0 || err != nil {
-			outerr = errors.New("Invalid docid, ids are positive integers")
-			continue
-		}
-
-		ids = append(ids, uint64(id))
-	}
-
-	if len(ids) < numRequired && outerr == nil {
+	if len(args) < numRequired {
 		if numRequired == 1 {
-			return ids, errors.New("You must supply at least one documents")
+			return args, errors.New("You must supply at least one documents")
 		} else {
-			return ids, errors.New(fmt.Sprintf("You must supply at least %d documents", numRequired))
+			return args, errors.New(fmt.Sprintf("You must supply at least %d documents", numRequired))
 		}
 	}
 
-	return ids, outerr
+	return args, nil
 }

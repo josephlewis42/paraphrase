@@ -241,12 +241,14 @@ $ paraphrase report compare students/joseph/*.java students/*.java
 Check out "[Winnowing: local algorithms for document fingerprinting](https://doi.org/10.1145/872757.872770)"
 for information about how paraphrase works behind the scenes.
 
-The following algorithms are used be used:
+Other algorithms used:
 
-* TF-IDF (inspired)
+* TF-IDF
 * [FNV Hashes](https://en.wikipedia.org/wiki/Fowler%E2%80%93Noll%E2%80%93Vo_hash_function)
 * Inverted Indexes
 * [Winnowing Document Fingerprinting](https://doi.org/10.1145/872757.872770) DOI: 10.1145/872757.872770
+* Snappy compression for the database
+* Cosine similarity for document similarity checks
 
 
 ## License
