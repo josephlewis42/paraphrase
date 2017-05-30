@@ -1,3 +1,6 @@
+// Copyright 2017 Joseph Lewis III <joseph@josephlewis.net>
+// Licensed under the MIT License. See LICENSE file for full details.
+
 package cmd
 
 import (
@@ -31,10 +34,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 `
 )
-
-func init() {
-	RootCmd.AddCommand(licenseCmd)
-}
 
 var licenseCmd = &cobra.Command{
 	Use:   "license",

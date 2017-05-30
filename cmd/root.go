@@ -1,7 +1,9 @@
+// Copyright 2017 Joseph Lewis III <joseph@josephlewis.net>
+// Licensed under the MIT License. See LICENSE file for full details.
+
 package cmd
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -13,21 +15,29 @@ var (
 	projectBase string
 	db          *paraphrase.ParaphraseDb
 
-	Version      string // Software version, auto-populated on build
-	Build        string // Software build date, auto-populated on build
-	Branch       string // Git branch of the build
-	showAllFiles bool
-	addMatcher   string
+	addMatcher string
 )
 
 func init() {
-	RootCmd.AddCommand(DbCmdGet, DbCmdAdd, versionCmd)
-	RootCmd.AddCommand(cmdDocText)
+	RootCmd.AddCommand(addCmd)
+
+	RootCmd.AddCommand(findCmd)
+	RootCmd.AddCommand(catCmd)
+	RootCmd.AddCommand(dumpCmd)
+
+	RootCmd.AddCommand(versionCmd)
+	RootCmd.AddCommand(licenseCmd)
+	RootCmd.AddCommand(GenCmd)
+
+	GenCmd.AddCommand(genmanCmd)
+	GenCmd.AddCommand(gendocCmd)
+	GenCmd.AddCommand(genAutocompleteCmd)
 
 	// commands for debugging
 	// RootCmd.AddCommand(CmdXNorm, CmdXSim, CmdXWinnow, CmdXHash)
 
 	RootCmd.PersistentFlags().StringVarP(&projectBase, "base", "b", ".", "base project directory")
+	RootCmd.PersistentFlags().SetAnnotation("base", cobra.BashCompSubdirsInDir, []string{})
 }
 
 var RootCmd = &cobra.Command{
@@ -47,18 +57,12 @@ between documents`,
 	},
 }
 
-var versionCmd = &cobra.Command{
-	Use:   "version",
-	Short: "prints version information to stdout",
-	Long:  `Prints the build, version and branch to stdout`,
+var GenCmd = &cobra.Command{
+	Use:   "gen",
+	Short: "Auto-generates Paraphrase's documentation",
+	Long:  `Auto-generates man pages, markdown docs and bash autocompletion`,
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Printf("Version: %s", Version)
-		fmt.Println()
-		fmt.Printf("Build: %s", Build)
-		fmt.Println()
-		fmt.Printf("Branch: %s", Branch)
-		fmt.Println()
-
+		cmd.Usage()
 	},
 }
 
@@ -70,62 +74,6 @@ func openDb(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
-}
-
-var DbCmdGet = &cobra.Command{
-	Use:     "get DOCID [DOCID]...",
-	Short:   "(read only) Get document info for the given doc id",
-	Long:    `Get document info for the given doc id`,
-	PreRunE: openDb,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		docIds, err := parseDocIds(args, 1)
-
-		if err != nil {
-			return err
-		}
-
-		for _, id := range docIds {
-			doc, err := db.FindDocumentById(id)
-
-			if err != nil {
-				fmt.Printf("Error document %s does not exist.\n", id)
-				continue
-			}
-
-			b, err := json.MarshalIndent(doc, "", "    ")
-
-			fmt.Println(string(b))
-
-		}
-
-		return nil
-	},
-}
-
-var cmdDocText = &cobra.Command{
-	Use:     "doctext docid [docid...]",
-	Short:   "gets the text of the given document(s)",
-	Long:    ``,
-	PreRunE: openDb,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		docIds, err := parseDocIds(args, 1)
-
-		if err != nil {
-			return err
-		}
-
-		for _, id := range docIds {
-			dd, err := db.FindDocumentDataById(id)
-
-			if err != nil {
-				return err
-			}
-
-			fmt.Println(string(dd.Body))
-		}
-
-		return nil
-	},
 }
 
 // parseDocIds converts a list of strings to uint64s

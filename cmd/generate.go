@@ -1,41 +1,45 @@
+// Copyright 2017 Joseph Lewis III <joseph@josephlewis.net>
+// Licensed under the MIT License. See LICENSE file for full details.
+
 package cmd
 
 import (
-	"log"
+	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/cobra/doc"
 )
 
-func init() {
-	RootCmd.AddCommand(genMan)
+var genmandir string
+
+// genautocomplete Generate shell autocompletion script for Hugo
+
+var genmanCmd = &cobra.Command{
+	Use:   "man",
+	Short: "Generate man pages for Paraphrase",
+	Long: `This command creates man pages for Paraphrase.
+By default, it creates them in "./man".`,
+
+	RunE: func(cmd *cobra.Command, args []string) error {
+		header := &doc.GenManHeader{
+			Section: "1",
+			Manual:  "Paraphrase Manual",
+			Source:  fmt.Sprintf("Paraphrase %s", Version),
+		}
+
+		if err := os.MkdirAll(genmandir, 0777); err != nil {
+			return err
+		}
+
+		fmt.Printf("Generaintg man pages in %s", genmandir)
+		fmt.Println()
+		doc.GenManTree(cmd.Root(), header, genmandir)
+		return nil
+	},
 }
 
-var genMan = &cobra.Command{
-	Use:   "genman",
-	Short: "(read only) Generate the man page for paraphrase",
-	Long:  `Generates man pages for parapharase`,
-	Run: func(cmd *cobra.Command, args []string) {
-
-		header := &doc.GenManHeader{
-			Title:   "PARAPHRASE",
-			Section: "3",
-		}
-		err := doc.GenManTree(cmd, header, "/tmp")
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		// if len(args) == 0 {
-		// 	fmt.Println("You must supply at least one document to hash.")
-		// 	fmt.Println()
-		// 	cmd.Usage()
-		// 	return
-		// }
-		//
-		// for _, path := range args {
-		// 	fmt.Printf("> %s\n", path)
-		// 	paraphrase.LogFingerprintFile(path)
-		// }
-	},
+func init() {
+	genmanCmd.PersistentFlags().StringVar(&genmandir, "dir", "man/", "the directory to write the man pages.")
+	genmanCmd.PersistentFlags().SetAnnotation("dir", cobra.BashCompSubdirsInDir, []string{})
 }

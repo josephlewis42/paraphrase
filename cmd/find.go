@@ -1,20 +1,13 @@
+// Copyright 2017 Joseph Lewis III <joseph@josephlewis.net>
+// Licensed under the MIT License. See LICENSE file for full details.
+
 package cmd
 
 import (
-	"errors"
-	"io/ioutil"
-	"log"
 	"os"
-	"path/filepath"
 
 	"github.com/josephlewis42/paraphrase/paraphrase"
 	"github.com/spf13/cobra"
-
-	"github.com/kennygrant/sanitize"
-)
-
-const (
-	CmdCatFormat = `{{namespace}} {{path}}{{crlf}}{{body}}{{crlf}}`
 )
 
 var (
@@ -28,30 +21,15 @@ var (
 )
 
 func init() {
-	RootCmd.AddCommand(cmdFind)
-	RootCmd.AddCommand(cmdCat)
-	RootCmd.AddCommand(cmdDump)
-
-	cmdFind.Flags().StringVarP(&findShaParam, "sha", "s", "", "find by sha1 or sha1 prefix")
-	cmdFind.Flags().StringVarP(&findIdParam, "id", "i", "", "search by a document's id")
-	cmdFind.Flags().StringVarP(&findPathParam, "path", "p", "", "search by a document's path")
-	cmdFind.Flags().StringVarP(&findNamespaceParam, "namespace", "n", "", "search by a document's namespace")
-	cmdFind.Flags().BoolVar(&findFullSha, "full-sha", false, "Show the full sha1 hash")
-	cmdFind.Flags().StringVar(&findOutputFormat, "fmt", "", "Format the results of the find in a particular way")
-
-	cmdCat.Flags().StringVarP(&findShaParam, "sha", "s", "", "find by sha1 or sha1 prefix")
-	cmdCat.Flags().StringVarP(&findIdParam, "id", "i", "", "search by a document's id")
-	cmdCat.Flags().StringVarP(&findPathParam, "path", "p", "", "search by a document's path")
-	cmdCat.Flags().StringVarP(&findNamespaceParam, "namespace", "n", "", "search by a document's namespace")
-
-	cmdDump.Flags().StringVarP(&findShaParam, "sha", "s", "", "find by sha1 or sha1 prefix")
-	cmdDump.Flags().StringVarP(&findIdParam, "id", "i", "", "search by a document's id")
-	cmdDump.Flags().StringVarP(&findPathParam, "path", "p", "", "search by a document's path")
-	cmdDump.Flags().StringVarP(&findNamespaceParam, "namespace", "n", "", "search by a document's namespace")
-	cmdDump.Flags().BoolVar(&dumpDryRun, "dry", false, "Do a dry run (don't create anything)")
+	findCmd.Flags().StringVarP(&findShaParam, "sha", "s", "", "find by sha1 or sha1 prefix")
+	findCmd.Flags().StringVarP(&findIdParam, "id", "i", "", "search by a document's id")
+	findCmd.Flags().StringVarP(&findPathParam, "path", "p", "", "search by a document's path")
+	findCmd.Flags().StringVarP(&findNamespaceParam, "namespace", "n", "", "search by a document's namespace")
+	findCmd.Flags().BoolVar(&findFullSha, "full-sha", false, "Show the full sha1 hash")
+	findCmd.Flags().StringVar(&findOutputFormat, "fmt", "", "Format the results of the find in a particular way")
 }
 
-var cmdFind = &cobra.Command{
+var findCmd = &cobra.Command{
 	Use:     "find [criteria]",
 	Short:   "Find documents based on properties",
 	Aliases: []string{"ls"},
@@ -142,78 +120,6 @@ CLI Style:
 		}
 
 		paraphrase.FormatDocuments(os.Stdout, docs, findOutputFormat, !findFullSha)
-
-		return nil
-	},
-}
-
-var cmdCat = &cobra.Command{
-	Use:   "cat [criteria]",
-	Short: "Gets the bodies of documents based on their properties",
-	Long: `Gets the bodies of documents based on their properties.
-This is a special case of the "find" command with the format always set
-to ` + CmdCatFormat,
-	PreRunE: openDb,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		findOutputFormat = CmdCatFormat
-		return cmdFind.RunE(cmd, args)
-	},
-}
-
-var cmdDump = &cobra.Command{
-	Use:     "dump [criteria] directory",
-	Short:   "Writes the matching docs to a directory",
-	Long:    `Writes the matching documents to a directory.`,
-	PreRunE: openDb,
-	RunE: func(cmd *cobra.Command, args []string) error {
-
-		if len(args) != 1 {
-			return errors.New("You must specify one directory to write to")
-		}
-
-		var doc paraphrase.Document
-
-		doc.Id = findIdParam
-		doc.Path = findPathParam
-		doc.Sha1 = findShaParam
-		doc.Namespace = findNamespaceParam
-
-		docs, err := db.FindDocumentsLike(doc)
-
-		if err != nil {
-			return err
-		}
-
-		parent := args[0]
-
-		for _, doc := range docs {
-			outpath := filepath.Join(parent, sanitize.Path(doc.Namespace), doc.Path)
-			filename := filepath.Base(outpath)
-			filedir := filepath.Dir(outpath)
-
-			log.Printf("Writing %s (%s) to %s\n", doc.Id, filename, filedir)
-
-			if dumpDryRun {
-				continue
-			}
-
-			body, err := db.FindDocumentDataById(doc.Id)
-			if err != nil {
-				log.Printf("Error getting %s: %s\n", doc.Id, err)
-				continue
-			}
-
-			// Make parent directory
-			err = os.MkdirAll(filedir, 0700)
-			if err != nil {
-				return err
-			}
-
-			err = ioutil.WriteFile(outpath, body.Body, 0700)
-			if err != nil {
-				log.Println(err)
-			}
-		}
 
 		return nil
 	},

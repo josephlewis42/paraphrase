@@ -62,20 +62,30 @@ func NewDocument(path, namespace string, body []byte) (*Document, *DocumentData)
 	doc.Sha1 = hex.EncodeToString(docHash.Sum(nil))
 	doc.IndexDate = time.Now()
 
-	return &doc, NewDocumentData(path, doc.Id, body)
+	return &doc, NewDocumentData(&doc, body)
 }
 
 type DocumentData struct {
-	Id   string `storm:"id,unique"`
-	Path string
-	Body []byte
+	Id        string `storm:"id,unique"`
+	Path      string `storm:"index"`
+	Namespace string `storm:"index"`
+	IndexDate time.Time
+	Body      []byte
 }
 
-func NewDocumentData(path, docid string, body []byte) *DocumentData {
+func (dd *DocumentData) BodySha1() string {
+	docHash := sha1.New()
+	docHash.Write(dd.Body)
+	return hex.EncodeToString(docHash.Sum(nil))
+}
+
+func NewDocumentData(doc *Document, body []byte) *DocumentData {
 	var dd DocumentData
 
-	dd.Id = docid
-	dd.Path = path
+	dd.Id = doc.Id
+	dd.Path = doc.Path
+	dd.Namespace = doc.Namespace
+	dd.IndexDate = doc.IndexDate
 	dd.Body = body
 
 	return &dd

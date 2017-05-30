@@ -1,3 +1,6 @@
+// Copyright 2017 Joseph Lewis III <joseph@josephlewis.net>
+// Licensed under the MIT License. See LICENSE file for full details.
+
 package cmd
 
 import (
@@ -22,12 +25,12 @@ var (
 )
 
 func init() {
-	DbCmdAdd.Flags().StringVar(&addCmdNamespace, "namespace", addCmdNamespace, "sets the namespace of the loaded files, by default this will be a timestamp")
-	DbCmdAdd.Flags().BoolVar(&addCmdDryRun, "dry", false, "list files to add rather than adding them")
-	DbCmdAdd.Flags().StringVarP(&addCmdMatch, "match", "m", WILDCARD, "only add items matching the given glob")
+	addCmd.Flags().StringVar(&addCmdNamespace, "namespace", addCmdNamespace, "sets the namespace of the loaded files, by default this will be a timestamp")
+	addCmd.Flags().BoolVar(&addCmdDryRun, "dry", false, "list files to add rather than adding them")
+	addCmd.Flags().StringVarP(&addCmdMatch, "match", "m", WILDCARD, "only add items matching the given glob")
 }
 
-var DbCmdAdd = &cobra.Command{
+var addCmd = &cobra.Command{
 	Use:   "add (-|[PATH]...)",
 	Short: "Add a document to the database or reads from stdin (use -)",
 	Long: `Adds a document with the given path to the database.
