@@ -119,7 +119,7 @@ CLI Style:
 			return err
 		}
 
-		paraphrase.FormatDocuments(os.Stdout, docs, findOutputFormat, !findFullSha)
+		paraphrase.FormatDocuments(os.Stdout, docs, findOutputFormat, !findFullSha, db)
 
 		return nil
 	},

@@ -86,6 +86,12 @@ func (p *ParaphraseDb) init() error {
 
 	err = p.db.Init(&DocumentData{})
 
+	if err != nil {
+		return err
+	}
+
+	err = p.db.Init(&IndexEntry{})
+
 	return err
 }
 
@@ -133,12 +139,15 @@ func (p *ParaphraseDb) CreateDocument(path, namespace string, body []byte) (*Doc
 	}
 
 	tx, err := p.db.Begin(true)
+
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Rollback()
 
-	// TODO save hashes to db
+	for hash, count := range doc.Hashes {
+		p.storeHash(tx, hash, doc.Id, count)
+	}
 
 	err = tx.Save(doc)
 	if err != nil {
@@ -183,18 +192,13 @@ func (p *ParaphraseDb) FindDocumentsLike(query Document) (results []Document, er
 
 	err = p.db.Select(matchers...).Find(&results)
 
-	return results, err
+	return results, maskErrNotFound(err)
 }
 
 func (p *ParaphraseDb) FindDocumentById(id string) (*Document, error) {
 	var doc Document
 	err := p.db.One("Id", id, &doc)
 	return &doc, err
-}
-
-func (p *ParaphraseDb) FindDocumentsByIds(ids ...string) (results []Document, err error) {
-	err = p.db.Select(q.In("Id", ids)).Find(&results)
-	return results, err
 }
 
 func (p *ParaphraseDb) FindDocumentsBySha1(sha1 string) (results []Document, err error) {
@@ -206,13 +210,21 @@ func (p *ParaphraseDb) FindDocumentsBySha1(sha1 string) (results []Document, err
 		err = p.db.Select(q.Re("Sha1", "^"+sha1+".*")).Find(&results)
 	}
 
-	return results, err
+	return results, maskErrNotFound(err)
 }
 
 func (p *ParaphraseDb) FindDocumentDataById(id string) (*DocumentData, error) {
 	var doc DocumentData
 	err := p.db.One("Id", id, &doc)
 	return &doc, err
+}
+
+func maskErrNotFound(err error) error {
+	if err == storm.ErrNotFound {
+		return nil
+	}
+
+	return err
 }
 
 // GlobToRegexStr converts a basic glob string to a regex

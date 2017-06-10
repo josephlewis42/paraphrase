@@ -290,6 +290,25 @@ func ExampleIFVector_MultF() {
 	// 20
 }
 
+func ExampleIFVector_Prod() {
+	a := NewIfVector()
+	a[1] = 1
+	a[2] = 2
+
+	b := NewIfVector()
+	b[1] = 3
+	b[2] = 4
+
+	a.Prod(b)
+
+	fmt.Println(a[1])
+	fmt.Println(a[2])
+
+	// Output:
+	// 3
+	// 8
+}
+
 func ExampleIFVector_DivF() {
 	a := NewIfVector()
 	a[1] = 1

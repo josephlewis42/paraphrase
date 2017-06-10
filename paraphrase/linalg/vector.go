@@ -112,8 +112,23 @@ func (vec IFVector) MultF(multiplier float64) {
 	vec.Map(mult)
 }
 
-func (vec IFVector) DivF(divider float64) {
-	vec.MultF(1 / divider)
+// Prod is an element-wise product between vectors.
+// a.Prod(b) = [a[1] * b[1], a[2] * b[2], ...]
+func (vec IFVector) Prod(multiplier IFVector) {
+	mult := func(key uint64, val float64) float64 {
+		return multiplier[key] * val
+	}
+
+	vec.Map(mult)
+}
+
+// DivF divides each element in the vector by the given value.
+func (vec IFVector) DivF(divisor float64) {
+	div := func(key uint64, dividend float64) float64 {
+		return dividend / divisor
+	}
+
+	vec.Map(div)
 }
 
 func (vec IFVector) CosineSimilarity(other IFVector) float64 {
