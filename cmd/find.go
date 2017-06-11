@@ -10,6 +10,52 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const FormattingOptions = `
+FORMATTING OPTIONS:
+
+Variables:
+
+	{{body}} The raw text of the content
+	{{path}} The internal path of the document, looks like "/bar/bazz"
+	{{namespace}} The starting namespace of the document like "foo"
+	{{id}} The id of the document
+	{{sha1}} SHA1 of the body
+	{{date}} The date and time the document was indexed
+
+Search Only Variables:
+
+	{{similarity}} The similarity score between the document and the query
+
+Formatting Functions:
+
+	{{VARIABLE | prefix ">"}} Prefixes all lines with the given text
+	{{VARIABLE | head 5}} Only allow the first five lines
+	{{VARIABLE | first 1024}} Get the first N bytes
+	{{repeat 10 "="}} Prints the given x times e.g. "=========="
+	{{crlf}} Prints a carriage return line feed CRLF i.e. "\r\n"
+	{{tab}} Prints a tab character i.e. "\t"
+
+Conversion Functions:
+
+	{{VARIABLE | html}} Escape HTML characters
+	{{VARIABLE | js}} Escape JavaScript characters
+	{{VARIABLE | urlquery}} Escape for embedding in URLs
+
+FORMATTING EXAMPLES:
+
+Search Engine Style:
+
+	<a href='http://localhost:8080/{{namespace | urlquery}}/{{path | urlquery}}'>{{id}}</a>{{path | html}}</a>
+	<br/>
+	<span class='muted'>{{sha1}}</span>
+	<code>{{body | first 150 | html}}</code>
+	<br/></br>
+
+CLI Style:
+
+	{{repeat 80 "="}}{{crlf}}{{id}} | {{path}}{{crlf}}{{sha1}}{{crlf | repeat 2}}{{body | prefix "> "}}{{crlf}}
+`
+
 var (
 	findShaParam       string
 	findIdParam        string
@@ -62,47 +108,7 @@ Change the format of the output.
 	cat myids.txt | paraphrase cat --fmt="
 		{{id}}\t{{path}}\n{{body | prefix "> "}}\r\n"
 
-FORMATTING OPTIONS:
-
-Variables:
-
-	{{body}} The raw text of the content
-	{{path}} The internal path of the document, looks like "/bar/bazz"
-	{{namespace}} The starting namespace of the document like "foo"
-	{{id}} The id of the document
-	{{sha1}} SHA1 of the body
-	{{date}} The date and time the document was indexed
-
-Formatting Functions:
-
-	{{VARIABLE | prefix ">"}} Prefixes all lines with the given text
-	{{VARIABLE | head 5}} Only allow the first five lines
-	{{VARIABLE | first 1024}} Get the first N bytes
-	{{repeat 10 "="}} Prints the given x times e.g. "=========="
-	{{crlf}} Prints a carriage return line feed CRLF i.e. "\r\n"
-	{{tab}} Prints a tab character i.e. "\t"
-
-Conversion Functions:
-
-	{{VARIABLE | html}} Escape HTML characters
-	{{VARIABLE | js}} Escape JavaScript characters
-	{{VARIABLE | urlquery}} Escape for embedding in URLs
-
-FORMATTING EXAMPLES:
-
-Search Engine Style:
-
-	<a href='http://localhost:8080/{{namespace | urlquery}}/{{path | urlquery}}'>{{id}}</a>{{path | html}}</a>
-	<br/>
-	<span class='muted'>{{sha1}}</span>
-	<code>{{body | first 150 | html}}</code>
-	<br/></br>
-
-CLI Style:
-
-	{{repeat 80 "="}}{{crlf}}{{id}} | {{path}}{{crlf}}{{sha1}}{{crlf | repeat 2}}{{body | prefix "> "}}{{crlf}}
-
-`,
+` + FormattingOptions,
 	PreRunE: openDb,
 	RunE: func(cmd *cobra.Command, args []string) error {
 

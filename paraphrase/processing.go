@@ -7,14 +7,28 @@ import (
 )
 
 var (
-	whitespace = regexp.MustCompile(`\s*`)
+	whitespace = regexp.MustCompile(`\s`)
 )
 
 type Fingerprint uint64
 
 func normalizeDocument(document []byte) []byte {
-	var empty []byte
-	return whitespace.ReplaceAll(document, empty)
+	return removeWhitespace(document)
+}
+
+func removeWhitespace(document []byte) []byte {
+	// https://github.com/golang/go/wiki/SliceTricks
+	output := make([]byte, 0, len(document))
+	for _, x := range document {
+
+		switch x {
+		case '\t', '\n', '\v', '\f', '\r', ' ', 0x85, 0xA0:
+			continue
+		default:
+			output = append(output, x)
+		}
+	}
+	return output
 }
 
 func fingerprintDocument(document []byte, size int) []Fingerprint {
@@ -86,89 +100,3 @@ func (p *ParaphraseDb) WinnowData(bytes []byte) (TermCountVector, error) {
 
 	return winnowed, nil
 }
-
-//
-// func Similarity(doc1, doc2 string) {
-// 	w1 := WinnowFile(doc1)
-// 	w2 := WinnowFile(doc2)
-//
-// 	fmt.Printf("File 1: %s, hashes: %d\n", doc1, len(w1))
-// 	fmt.Printf("File 2: %s, hashes: %d\n", doc2, len(w2))
-//
-// 	if len(w2) < len(w1) {
-// 		tmp := w1
-// 		w1 = w2
-// 		w2 = tmp
-// 	}
-//
-// 	matches := 0
-//
-// 	for key, _ := range w1 {
-// 		if _, ok := w2[key]; ok {
-// 			matches += 1
-// 		}
-// 	}
-//
-// 	fmt.Printf("Matches: %d (%d%%)\n", matches, (matches*100.0)/len(w1))
-//
-// }
-
-//
-// func CreateDocumentFromData(path string, data []byte) (*Document, error) {
-//
-// 	hashesMap, err := WinnowData(data)
-//
-// 	if err != nil {
-// 		return nil, err
-// 	}
-//
-// 	var doc Document
-//
-// 	doc.IndexDate = time.Now().Format(time.RFC3339)
-// 	doc.Path = path
-// 	_, doc.Name = filepath.Split(path)
-// 	doc.Id = 0
-// 	doc.Meta = make(map[string]string)
-//
-// 	doc.Hashes = make([]uint64, len(hashesMap))
-//
-// 	i := 0
-// 	for k := range hashesMap {
-// 		doc.Hashes[i] = k
-// 		i++
-// 	}
-//
-// 	return &doc, nil
-// }
-
-//
-// func Report(documentId uint64, db *ParaphraseDb) error {
-//
-// 	doc, err := db.GetDoc(documentId)
-//
-// 	if err != nil {
-// 		return err
-// 	}
-//
-// 	matches := make(map[uint64]int)
-// 	for _, hash := range doc.Hashes {
-// 		docs, _ := db.GetDocsByHash(hash)
-//
-// 		for _, docId := range docs {
-// 			ct, _ := matches[docId]
-// 			matches[docId] = ct + 1
-// 		}
-// 	}
-//
-// 	// remove self matches
-// 	delete(matches, documentId)
-//
-// 	hashCount := len(doc.Hashes)
-//
-// 	for k, v := range matches {
-// 		fmt.Printf("%d: %d matches (%d%%)", k, v, (v*100.0)/hashCount)
-// 		fmt.Println()
-// 	}
-//
-// 	return nil
-// }

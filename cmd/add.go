@@ -59,7 +59,18 @@ Use add - to read from stdin.`,
 					return err
 				}
 
-				tmp := provider.NewTreeWalkerProducer(absPath, addCmdNamespace, true, len(absPath))
+				prefixLen := len(absPath)
+				if isdir, err := isDirectory(path); err == nil && !isdir {
+					// The trailing separator gets removed so we subtract
+					// off the length of the file from the whole path instead
+					// just in case there's an OS with a funky file separator
+					// pattern.
+					prefixLen = len(absPath) - len(filepath.Base(absPath))
+				}
+
+				log.Printf("Searching recursively in %s\n", absPath)
+
+				tmp := provider.NewTreeWalkerProducer(absPath, addCmdNamespace, true, prefixLen)
 
 				mainProducer = provider.NewJoinerProducer(mainProducer, tmp)
 			}

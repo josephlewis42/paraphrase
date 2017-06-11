@@ -6,6 +6,9 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"log"
+	"os"
+	"runtime/pprof"
 
 	"github.com/josephlewis42/paraphrase/paraphrase"
 	"github.com/spf13/cobra"
@@ -16,6 +19,7 @@ var (
 	db          *paraphrase.ParaphraseDb
 
 	addMatcher string
+	cpuprofile string
 )
 
 func init() {
@@ -24,6 +28,7 @@ func init() {
 	RootCmd.AddCommand(findCmd)
 	RootCmd.AddCommand(catCmd)
 	RootCmd.AddCommand(dumpCmd)
+	RootCmd.AddCommand(searchCmd)
 
 	RootCmd.AddCommand(versionCmd)
 	RootCmd.AddCommand(licenseCmd)
@@ -37,6 +42,7 @@ func init() {
 	// RootCmd.AddCommand(CmdXNorm, CmdXSim, CmdXWinnow, CmdXHash)
 
 	RootCmd.PersistentFlags().StringVarP(&projectBase, "base", "b", ".", "base project directory")
+	RootCmd.PersistentFlags().StringVar(&cpuprofile, "cpuprofile", "", "write cpu profiling info to file")
 	RootCmd.PersistentFlags().SetAnnotation("base", cobra.BashCompSubdirsInDir, []string{})
 }
 
@@ -46,6 +52,15 @@ var RootCmd = &cobra.Command{
 	Long: `Paraphrase looks for duplicated content given collections of text
 good if you're looking for plagarism, suspicious copy/pasting, or links
 between documents`,
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		if cpuprofile != "" {
+			f, err := os.Create(cpuprofile)
+			if err != nil {
+				log.Fatal(err)
+			}
+			pprof.StartCPUProfile(f)
+		}
+	},
 	Run: func(cmd *cobra.Command, args []string) {
 		cmd.Usage()
 	},
@@ -53,6 +68,10 @@ between documents`,
 	PersistentPostRun: func(cmd *cobra.Command, args []string) {
 		if db != nil {
 			db.Close()
+		}
+
+		if cpuprofile != "" {
+			pprof.StopCPUProfile()
 		}
 	},
 }

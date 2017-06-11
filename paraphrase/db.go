@@ -146,7 +146,10 @@ func (p *ParaphraseDb) CreateDocument(path, namespace string, body []byte) (*Doc
 	defer tx.Rollback()
 
 	for hash, count := range doc.Hashes {
-		p.storeHash(tx, hash, doc.Id, count)
+		err := p.storeHash(tx, hash, doc.Id, count)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	err = tx.Save(doc)
