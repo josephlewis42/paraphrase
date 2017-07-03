@@ -88,7 +88,7 @@ Formatting the search output:
 		}
 
 		for _, res := range results {
-			fmt.Printf("Result: %s %s %s\n", res.Doc.Id, res.Doc.Namespace, res.Doc.Path)
+			fmt.Printf("Result: %s %s %s %f\n", res.Doc.Id, res.Doc.Namespace, res.Doc.Path, res.Similarity())
 		}
 
 		return err

@@ -11,56 +11,21 @@ import (
 )
 
 type IndexEntry struct {
-	Hash uint64 `storm:"id"`
-	Docs map[string]int16
-}
-
-func NewIndexEntry(hash uint64) *IndexEntry {
-	var ie IndexEntry
-
-	ie.Hash = hash
-	ie.Docs = make(map[string]int16)
-
-	return &ie
-}
-
-func (ie *IndexEntry) AddDocument(docId string, frequency int16) {
-	if ie.Docs == nil {
-		ie.Docs = make(map[string]int16)
-	}
-
-	ie.Docs[docId] = frequency
+	Hash      uint64 `storm:"id,index"`
+	Doc       string
+	Frequency int16
 }
 
 func (p *ParaphraseDb) storeHash(tx storm.Node, hash uint64, docId string, count int16) error {
-	index, err := p.getIndexOrBlank(hash)
-	if err != nil {
-		return err
-	}
-
-	index.AddDocument(docId, count)
-	return tx.Save(index)
+	return tx.Save(&IndexEntry{hash, docId, count})
 }
 
-func (p *ParaphraseDb) getIndexOrBlank(hash uint64) (*IndexEntry, error) {
+func (p *ParaphraseDb) getIndex(hash uint64) ([]IndexEntry, error) {
+	var index []IndexEntry
 
-	index, err := p.getIndex(hash)
-	if err == nil {
-		return index, nil
-	}
-
-	if err == storm.ErrNotFound {
-		ie := NewIndexEntry(hash)
-		return ie, nil
-	}
-
+	//err := p.db.Select(q.Eq("Hash", hash)).Find(&index)
+	err := p.db.Find("Hash", hash, &index)
 	return index, err
-}
-
-func (p *ParaphraseDb) getIndex(hash uint64) (*IndexEntry, error) {
-	var index IndexEntry
-	err := p.db.One("Hash", hash, &index)
-	return &index, err
 }
 
 type SearchResult struct {
@@ -69,7 +34,19 @@ type SearchResult struct {
 }
 
 func (sr *SearchResult) Similarity() float64 {
-	return 1.0
+	match := 0.0
+	mismatch := 0.0
+
+	for k, _ := range sr.Doc.Hashes {
+		if _, ok := (*sr.Query)[k]; ok {
+			match++
+		} else {
+			mismatch++
+		}
+	}
+
+	//sr.Doc.Hashes
+	return match / (match + mismatch)
 }
 
 func (p *ParaphraseDb) QueryById(id string) (results []SearchResult, err error) {
@@ -78,7 +55,6 @@ func (p *ParaphraseDb) QueryById(id string) (results []SearchResult, err error) 
 	if err != nil {
 		return nil, err
 	}
-
 	return p.QueryByVector(doc.Hashes)
 }
 
@@ -115,16 +91,15 @@ func (p *ParaphraseDb) QueryByVector(query TermCountVector) (results []SearchRes
 
 		switch err {
 		case nil:
-			docFrequency := 1 + len(idx.Docs)
+			docFrequency := 1 + len(idx)
 			idfVector[hash] = 1 + math.Log(count/float64(docFrequency))
 
-			for id, _ := range idx.Docs {
-				matchingDocIds[id] = true
+			for _, doc := range idx {
+				matchingDocIds[doc.Doc] = true
 			}
 
 		case storm.ErrNotFound:
 			fmt.Printf("Nothing found for %d\n", hash)
-
 			continue // a query might not have any matching documents
 
 		default:

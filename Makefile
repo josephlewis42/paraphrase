@@ -32,6 +32,11 @@ paraphrase: dependencies outputdir
 	@echo
 
 	$(BUILDCMD)
+	
+	@echo
+	@echo "${CYAN}Done building.${NC}"
+	@echo
+
 
 $(RELEASEOS): clean dependencies outputdir
 	@echo
