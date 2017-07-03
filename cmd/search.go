@@ -7,21 +7,35 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"os"
 
 	"github.com/josephlewis42/paraphrase/paraphrase"
 	"github.com/spf13/cobra"
 )
 
+const ()
+
 var (
-	searchIdParam  bool
-	searchDocParam bool
-	searchLimit    int
+	searchIdParam      bool
+	searchDocParam     bool
+	searchLimit        int
+	searchResultFormat string = `
+ID:    {{id}}
+Path:  {{path}}
+SHA1:  {{sha1}}
+Score: {{similarity}}
+
+{{body | head 5 | prefix "> "}}
+
+{{repeat 80 "-"}}
+`
 )
 
 func init() {
 	searchCmd.Flags().BoolVarP(&searchIdParam, "id", "i", false, "search by a document's id")
 	searchCmd.Flags().BoolVarP(&searchDocParam, "file", "f", false, "search by the text in a given file")
 	searchCmd.Flags().IntVar(&searchLimit, "limit", 20, "limit to the top n documents")
+	searchCmd.Flags().StringVar(&searchResultFormat, "fmt", searchResultFormat, "The format for searching")
 
 }
 
@@ -87,9 +101,11 @@ Formatting the search output:
 			return err
 		}
 
-		for _, res := range results {
-			fmt.Printf("Result: %s %s %s %f\n", res.Doc.Id, res.Doc.Namespace, res.Doc.Path, res.Similarity())
-		}
+		// for _, res := range results {
+		// 	fmt.Printf("Result: %s %s %s %f\n", res.Doc.Id, res.Doc.Namespace, res.Doc.Path, res.Similarity())
+		// }
+
+		paraphrase.FormatSearchResults(os.Stdout, results, searchResultFormat, db)
 
 		return err
 	},

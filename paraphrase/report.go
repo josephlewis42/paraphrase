@@ -17,7 +17,7 @@ func FormatDocuments(w io.Writer, docs []Document, templateFormat string, shortS
 	}
 
 	for _, doc := range docs {
-		err := RenderDocument(templateFormat, &doc, db)
+		err := RenderDocument(templateFormat, &doc, db, nil)
 
 		if err != nil {
 			log.Println(err)
@@ -27,7 +27,23 @@ func FormatDocuments(w io.Writer, docs []Document, templateFormat string, shortS
 	}
 }
 
-func RenderDocument(templateFormat string, doc *Document, db *ParaphraseDb) error {
+func FormatSearchResults(w io.Writer, docs []SearchResult, templateFormat string, db *ParaphraseDb) {
+	for _, doc := range docs {
+		extraFuncs := template.FuncMap{
+			"similarity": func() float64 { return doc.Similarity() },
+		}
+
+		err := RenderDocument(templateFormat, doc.Doc, db, extraFuncs)
+
+		if err != nil {
+			log.Println(err)
+			break
+		}
+
+	}
+}
+
+func RenderDocument(templateFormat string, doc *Document, db *ParaphraseDb, extraFuncs template.FuncMap) error {
 
 	funcMap := template.FuncMap{
 		// The name "title" is what the function will be called in the template text.
@@ -46,6 +62,12 @@ func RenderDocument(templateFormat string, doc *Document, db *ParaphraseDb) erro
 		"prefix": prefixLines,
 		"first":  firstFunc,
 		"repeat": repeatText,
+	}
+
+	if extraFuncs != nil {
+		for k, v := range extraFuncs {
+			funcMap[k] = v
+		}
 	}
 
 	tmpl, err := template.New("DocumentTemplate").Funcs(funcMap).Parse(templateFormat)

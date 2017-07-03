@@ -7,6 +7,7 @@ import (
 	"math"
 
 	"github.com/asdine/storm"
+	"github.com/bradfitz/slice"
 	"github.com/josephlewis42/paraphrase/paraphrase/linalg"
 )
 
@@ -87,7 +88,6 @@ func (p *ParaphraseDb) QueryByVector(query TermCountVector) (results []SearchRes
 
 	for hash, _ := range query {
 		idx, err := p.getIndex(hash)
-		fmt.Println(hash)
 
 		switch err {
 		case nil:
@@ -116,6 +116,10 @@ func (p *ParaphraseDb) QueryByVector(query TermCountVector) (results []SearchRes
 
 		results = append(results, SearchResult{&query, doc})
 	}
+
+	slice.Sort(results[:], func(i, j int) bool {
+		return results[i].Similarity() > results[j].Similarity()
+	})
 
 	return results, nil
 }
