@@ -4,6 +4,7 @@
 package cmd
 
 import (
+	"fmt"
 	"strconv"
 
 	"github.com/josephlewis42/paraphrase/paraphrase"
@@ -51,6 +52,8 @@ var initCmd = &cobra.Command{
 	Short: "Initializes paraphrase",
 	Long:  `Sets up paraphrase with some questions and answers`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+
+		fmt.Println(background)
 
 		settings := paraphrase.NewDefaultSettings()
 
