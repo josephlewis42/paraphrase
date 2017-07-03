@@ -1,11 +1,13 @@
 package paraphrase
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"path"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/asdine/storm"
 	"github.com/asdine/storm/q"
@@ -25,11 +27,17 @@ const (
 	sha1HexLength          = len("da39a3ee5e6b4b0d3255bfef95601890afd80709")
 )
 
+var (
+	SettingsNotDefinedErr = errors.New("No settings found. If you meant to create a database run 'paraphrase init'")
+	AlreadyInitializedErr = errors.New("It looks like paraphrase has already been initialized.")
+)
+
 type Settings struct {
-	Version         int
+	Version         int `storm:"id,unique"`
 	WindowSize      int
 	FingerprintSize int
 	RobustHash      bool
+	CreatedAt       time.Time
 }
 
 func NewDefaultSettings() Settings {
@@ -39,6 +47,7 @@ func NewDefaultSettings() Settings {
 	settings.WindowSize = 10
 	settings.FingerprintSize = 10
 	settings.RobustHash = true
+	settings.CreatedAt = time.Now()
 
 	return settings
 }
@@ -49,6 +58,21 @@ type ParaphraseDb struct {
 	db        *storm.DB
 }
 
+// Creates a new database in the given directory with the given settings
+func Create(directory string, settings Settings) (*ParaphraseDb, error) {
+	db, err := Open(directory)
+
+	switch err {
+	case nil:
+		return nil, AlreadyInitializedErr
+	case SettingsNotDefinedErr:
+		db.settings = settings
+		return db, db.saveSettings()
+	default:
+		return nil, err
+	}
+}
+
 // Open or create a new paraphrase database in the given directory
 func Open(directory string) (*ParaphraseDb, error) {
 
@@ -56,7 +80,6 @@ func Open(directory string) (*ParaphraseDb, error) {
 	var err error
 
 	paraphrase.directory = directory
-	paraphrase.settings = NewDefaultSettings()
 
 	// Open the my.db data file in your current directory.
 	// It will be created if it doesn't exist.
@@ -71,7 +94,12 @@ func Open(directory string) (*ParaphraseDb, error) {
 
 	err = paraphrase.init()
 	if err != nil {
-		return nil, fmt.Errorf("Could not init db: %s", err)
+		return nil, fmt.Errorf("Could not open the database: %s", err)
+	}
+
+	err = paraphrase.loadSettings()
+	if err != nil {
+		return &paraphrase, err
 	}
 
 	return &paraphrase, nil
@@ -91,12 +119,46 @@ func (p *ParaphraseDb) init() error {
 	}
 
 	err = p.db.Init(&IndexEntry{})
+	if err != nil {
+		return err
+	}
+
+	err = p.db.Init(&Settings{})
+	if err != nil {
+		return err
+	}
 
 	return err
 }
 
 func (p *ParaphraseDb) Close() error {
 	return p.db.Close()
+}
+
+func (p *ParaphraseDb) loadSettings() error {
+	// load settings
+	var settings Settings
+	err := p.db.One("Version", CurrentSettingsVersion, &settings)
+
+	switch err {
+	case storm.ErrNotFound:
+		return SettingsNotDefinedErr
+	case nil:
+		p.settings = settings
+
+	default:
+		return err
+	}
+
+	return nil
+}
+
+func (p *ParaphraseDb) saveSettings() error {
+	return p.db.Save(&p.settings)
+}
+
+func (p *ParaphraseDb) GetSettings() Settings {
+	return p.settings
 }
 
 func (p *ParaphraseDb) AddDocuments(producer provider.DocumentProducer) (added []Document, ok bool) {
