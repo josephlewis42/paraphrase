@@ -3,13 +3,13 @@ package provider
 import (
 	"io/ioutil"
 	"log"
+	"net/url"
 	"path/filepath"
-	"strings"
 
 	git "gopkg.in/src-d/go-git.v4"
 )
 
-func NewGitProvider(url, namespace string) (DocumentProducer, error) {
+func NewGitProvider(gitUrl, namespace string) (DocumentProducer, error) {
 	producer := make(DocumentProducer, 5)
 
 	directory, err := ioutil.TempDir("", "paraphrasegit")
@@ -24,9 +24,9 @@ func NewGitProvider(url, namespace string) (DocumentProducer, error) {
 
 	prefixlen := len(absPath)
 
-	log.Printf("Cloning %v to %v\n", url, absPath)
+	log.Printf("Cloning %v to %v\n", gitUrl, absPath)
 	r, err := git.PlainClone(directory, false, &git.CloneOptions{
-		URL:               url,
+		URL:               gitUrl,
 		RecurseSubmodules: git.NoRecurseSubmodules,
 		Depth:             1,
 	})
@@ -41,17 +41,16 @@ func NewGitProvider(url, namespace string) (DocumentProducer, error) {
 		hash = head.Hash().String()
 	}
 
-	trimmedUrl := strings.SplitN(url, "//", 2)[1]
+	urlParts, _ := url.Parse(gitUrl)
 
 	if namespace == "" {
-		namespace = trimmedUrl + " rev: " + hash
+		namespace = urlParts.Host + urlParts.Path + " rev: " + hash
 	}
 
 	log.Println("Finished clone")
 
 	go func() {
 		generatePaths(absPath, namespace, true, prefixlen, producer)
-		//os.RemoveAll(directory) // clean up
 	}()
 
 	return producer, err
