@@ -99,14 +99,14 @@ func openDb(cmd *cobra.Command, args []string) error {
 
 var (
 	queryableShaParam       string
-	queryableIdParam        string
+	queryableIdParam        int64
 	queryablePathParam      string
 	queryableNamespaceParam string
 )
 
 func initQueryableCommand(cmd *cobra.Command) {
 	cmd.Flags().StringVarP(&queryableShaParam, "sha", "s", "", "find by sha1 or sha1 prefix")
-	cmd.Flags().StringVarP(&queryableIdParam, "id", "i", "", "search by a document's id")
+	cmd.Flags().Int64VarP(&queryableIdParam, "id", "i", 0, "search by a document's id")
 	cmd.Flags().StringVarP(&queryablePathParam, "path", "p", "", "search by a document's path")
 	cmd.Flags().StringVarP(&queryableNamespaceParam, "namespace", "n", "", "search by a document's namespace")
 }

@@ -371,7 +371,7 @@ func (p *ParaphraseDb) CountDocuments() (int, error) {
 func (p *ParaphraseDb) FindDocumentsLike(query Document) (results []Document, err error) {
 	var matchers []q.Matcher
 
-	if query.Id != "" {
+	if query.Id != 0 {
 		matchers = append(matchers, q.Eq("Id", query.Id))
 	}
 
@@ -392,7 +392,7 @@ func (p *ParaphraseDb) FindDocumentsLike(query Document) (results []Document, er
 	return results, maskErrNotFound(err)
 }
 
-func (p *ParaphraseDb) FindDocumentById(id string) (*Document, error) {
+func (p *ParaphraseDb) FindDocumentById(id int64) (*Document, error) {
 	var doc Document
 	err := p.db.One("Id", id, &doc)
 	return &doc, err
@@ -410,7 +410,7 @@ func (p *ParaphraseDb) FindDocumentsBySha1(sha1 string) (results []Document, err
 	return results, maskErrNotFound(err)
 }
 
-func (p *ParaphraseDb) FindDocumentDataById(id string) (*DocumentData, error) {
+func (p *ParaphraseDb) FindDocumentDataById(id int64) (*DocumentData, error) {
 	var doc DocumentData
 	err := p.db.One("Id", id, &doc)
 	return &doc, err

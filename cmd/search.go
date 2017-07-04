@@ -16,8 +16,8 @@ import (
 const ()
 
 var (
-	searchIdParam      bool
-	searchDocParam     bool
+	searchIdParam      int64
+	searchDocParam     string
 	searchLimit        int
 	searchResultFormat string = `
 ID:    {{id}}
@@ -32,8 +32,8 @@ Score: {{similarity}}
 )
 
 func init() {
-	searchCmd.Flags().BoolVarP(&searchIdParam, "id", "i", false, "search by a document's id")
-	searchCmd.Flags().BoolVarP(&searchDocParam, "file", "f", false, "search by the text in a given file")
+	searchCmd.Flags().Int64VarP(&searchIdParam, "id", "i", 0, "search by a document's id")
+	searchCmd.Flags().StringVarP(&searchDocParam, "file", "f", "", "search by the text in a given file")
 	searchCmd.Flags().IntVar(&searchLimit, "limit", 20, "limit to the top n documents")
 	searchCmd.Flags().StringVar(&searchResultFormat, "fmt", searchResultFormat, "The format for searching")
 
@@ -70,23 +70,20 @@ Formatting the search output:
 		var err error
 
 		switch {
-		case len(args) == 0:
-			return errors.New("You must a specify a query/doc/id")
+		case len(args) != 0 && searchIdParam != 0 && searchDocParam == "":
+			return errors.New("You must specify exactly one query, document path or id")
 
-		case len(args) > 1:
-			return errors.New("You must specify only one query/doc/id")
+		case len(args) == 1:
+			results, err = db.QueryByString(args[0])
 
-		case searchIdParam && searchDocParam:
-			return errors.New("You cannot use both the ID and document flags at the same time.")
-
-		case searchIdParam:
-			results, err = db.QueryById(args[0])
+		case searchIdParam != 0:
+			results, err = db.QueryById(searchIdParam)
 			if err != nil {
 				return err
 			}
 
-		case searchDocParam:
-			bytes, err := ioutil.ReadFile(args[0])
+		case searchDocParam != "":
+			bytes, err := ioutil.ReadFile(searchDocParam)
 			if err != nil {
 				return err
 			}
@@ -100,10 +97,6 @@ Formatting the search output:
 		if err != nil {
 			return err
 		}
-
-		// for _, res := range results {
-		// 	fmt.Printf("Result: %s %s %s %f\n", res.Doc.Id, res.Doc.Namespace, res.Doc.Path, res.Similarity())
-		// }
 
 		paraphrase.FormatSearchResults(os.Stdout, results, searchResultFormat, db)
 

@@ -13,11 +13,11 @@ import (
 
 type IndexEntry struct {
 	Hash      uint64 `storm:"id,index"`
-	Doc       string
+	Doc       int64
 	Frequency int16
 }
 
-func (p *ParaphraseDb) storeHash(tx storm.Node, hash uint64, docId string, count int16) error {
+func (p *ParaphraseDb) storeHash(tx storm.Node, hash uint64, docId int64, count int16) error {
 	return tx.Save(&IndexEntry{hash, docId, count})
 }
 
@@ -50,7 +50,7 @@ func (sr *SearchResult) Similarity() float64 {
 	return match / (match + mismatch)
 }
 
-func (p *ParaphraseDb) QueryById(id string) (results []SearchResult, err error) {
+func (p *ParaphraseDb) QueryById(id int64) (results []SearchResult, err error) {
 
 	doc, err := p.FindDocumentById(id)
 	if err != nil {
@@ -84,7 +84,7 @@ func (p *ParaphraseDb) QueryByVector(query TermCountVector) (results []SearchRes
 	count := float64(countI)
 
 	idfVector := make(linalg.IFVector)
-	matchingDocIds := make(map[string]bool)
+	matchingDocIds := make(map[int64]bool)
 
 	for hash, _ := range query {
 		idx, err := p.getIndex(hash)
@@ -110,7 +110,7 @@ func (p *ParaphraseDb) QueryByVector(query TermCountVector) (results []SearchRes
 	for id, _ := range matchingDocIds {
 		doc, err := p.FindDocumentById(id)
 		if err != nil {
-			log.Printf("Could not fetch doc %s: %s", id, err)
+			log.Printf("Could not fetch doc %d: %s", id, err)
 			continue
 		}
 

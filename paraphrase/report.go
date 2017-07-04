@@ -50,7 +50,7 @@ func RenderDocument(templateFormat string, doc *Document, db *ParaphraseDb, extr
 		"body":      func() string { doc, _ := db.FindDocumentDataById(doc.Id); return string(doc.Body) },
 		"path":      func() string { return doc.Path },
 		"namespace": func() string { return doc.Namespace },
-		"id":        func() string { return doc.Id },
+		"id":        func() int64 { return doc.Id },
 		"sha1":      func() string { return doc.Sha1 },
 		"date":      func() time.Time { return doc.IndexDate },
 		"hashes":    func() map[uint64]int16 { return doc.Hashes },

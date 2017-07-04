@@ -12,7 +12,7 @@ import (
 
 const (
 	documentFormatHeader = "ID\tSHA1\tNamespace\tPath"
-	documentFormat       = "%s\t%s\t%s\t%s"
+	documentFormat       = "%v\t%v\t%v\t%v"
 	shortShaLen          = 8
 )
 
@@ -23,9 +23,9 @@ func init() {
 }
 
 type Document struct {
-	Id        string `storm:"id,unique"`
-	Path      string `storm:"index"`
-	Namespace string `storm:"index"`
+	Id        int64 `storm:"id,unique"`
+	Path      string
+	Namespace string
 	IndexDate time.Time
 	Sha1      string `storm:"index"`
 	Hashes    TermCountVector
@@ -66,9 +66,9 @@ func NewDocument(path, namespace string, body []byte) (*Document, *DocumentData)
 }
 
 type DocumentData struct {
-	Id        string `storm:"id,unique"`
-	Path      string `storm:"index"`
-	Namespace string `storm:"index"`
+	Id        int64 `storm:"id,unique"`
+	Path      string
+	Namespace string
 	IndexDate time.Time
 	Body      []byte
 }
@@ -91,7 +91,12 @@ func NewDocumentData(doc *Document, body []byte) *DocumentData {
 	return &dd
 }
 
-func newDocId() string {
-	randint := uint64(rand.Int63())
-	return fmt.Sprintf("%x", randint)
+func newDocId() int64 {
+	v := rand.Int63()
+
+	if v < 0 {
+		return -v
+	}
+
+	return v
 }
