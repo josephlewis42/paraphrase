@@ -91,7 +91,7 @@ func Open(directory string) (*ParaphraseDb, error) {
 
 	// Open the my.db data file in your current directory.
 	// It will be created if it doesn't exist.
-	dbPath := findDbPath(directory)
+	dbPath := FindDbPath(directory)
 
 	// paraphrase.db, err = storm.Open(dbPath, storm.Codec(snappyjson.Codec))
 	paraphrase.db, err = storm.Open(dbPath, storm.Codec(snappyjson.MsgpackCodec))
@@ -113,7 +113,7 @@ func Open(directory string) (*ParaphraseDb, error) {
 	return &paraphrase, nil
 }
 
-func findDbPath(directory string) string {
+func FindDbPath(directory string) string {
 
 	if path.Ext(directory) == DbExt {
 		return directory
@@ -190,6 +190,7 @@ func (p *ParaphraseDb) WriteStats(writer io.Writer) {
 	boltInfo := p.db.Bolt.Info()
 	docCount, _ := p.CountDocuments()
 	hashCount, _ := p.db.Count(&IndexEntry{})
+	boltStats := p.db.Bolt.Stats()
 
 	settings := []struct {
 		Group   string
@@ -206,6 +207,13 @@ func (p *ParaphraseDb) WriteStats(writer io.Writer) {
 		{"", "Page Size", boltInfo.PageSize},
 		{"", "Number of Documents", docCount},
 		{"", "Number of Distinct Hashes", hashCount},
+		{"BoltDb", "", ""},
+		{"", "FreeAlloc", boltStats.FreeAlloc},
+		{"", "FreePageN", boltStats.FreePageN},
+		{"", "FreelistInuse", boltStats.FreelistInuse},
+		{"", "OpenTxN", boltStats.OpenTxN},
+		{"", "PendingPageN", boltStats.PendingPageN},
+		{"", "TxN", boltStats.TxN},
 	}
 
 	w := new(tabwriter.Writer)

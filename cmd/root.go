@@ -37,6 +37,7 @@ func init() {
 	RootCmd.AddCommand(changelogCmd)
 	RootCmd.AddCommand(licenseCmd)
 	RootCmd.AddCommand(GenCmd)
+	RootCmd.AddCommand(compactCmd)
 
 	GenCmd.AddCommand(genmanCmd)
 	GenCmd.AddCommand(gendocCmd)
