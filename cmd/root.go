@@ -22,6 +22,7 @@ var (
 
 func init() {
 	RootCmd.AddCommand(addCmd)
+	RootCmd.AddCommand(cmdGit)
 
 	RootCmd.AddCommand(findCmd)
 	RootCmd.AddCommand(catCmd)

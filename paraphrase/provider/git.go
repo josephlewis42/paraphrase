@@ -1,98 +1,58 @@
 package provider
 
-//
-// func Git(url string, matcher string, prefix string, db *../ParaphraseDb) error {
-// 	globby, err := glob.Compile(matcher)
-// 	if err != nil {
-// 		return err
-// 	}
-//
-// 	directory, err := ioutil.TempDir("", "paraphrasegit")
-// 	if err != nil {
-// 		return err
-// 	}
-//
-// 	defer os.RemoveAll(directory) // clean up
-//
-// 	fmt.Printf("git clone %s %s --recursive", url, directory)
-// 	fmt.Println()
-//
-// 	r, err := git.PlainClone(directory, false, &git.CloneOptions{
-// 		URL:               url,
-// 		RecurseSubmodules: git.DefaultSubmoduleRecursionDepth,
-// 	})
-//
-// 	// ... retrieving the branch being pointed by HEAD
-// 	ref, err := r.Head()
-// 	if err != nil {
-// 		return err
-// 	}
-//
-// 	// ... retrieving the commit object
-// 	commit, err := r.CommitObject(ref.Hash())
-// 	if err != nil {
-// 		return err
-// 	}
-//
-// 	fmt.Println(commit)
-//
-// 	filepath.Walk(directory, func(path string, f os.FileInfo, err error) error {
-// 		if f.Name() == ".git" {
-// 			return filepath.SkipDir
-// 		}
-//
-// 		matched := globby.Match(path)
-//
-// 		if !matched {
-// 			fmt.Printf("Skipping: %s", path)
-// 			fmt.Println()
-// 		} else {
-// 			fmt.Printf("Found: %s", path)
-// 			fmt.Println()
-// 			err := AddFile(path, prefix, db)
-// 			if err != nil {
-// 				return err
-// 			}
-// 		}
-// 		return nil
-// 	})
-//
-// 	return nil
-// }
-//
-// func AddFile(fp string, prefix string, db *ParaphraseDb) error {
-// 	fmt.Printf("Adding: %s\n", fp)
-//
-// 	// bytes, err := ioutil.ReadFile(fp)
-// 	//
-// 	// if err != nil {
-// 	// 	return err
-// 	// }
-// 	//
-// 	// fakePath := fp
-// 	// if prefix != "" {
-// 	// 	fakePath = prefix + "/" + fp
-// 	// }
-// 	//
-// 	// doc, err := CreateDocumentFromData(fakePath, bytes)
-// 	//
-// 	// if err != nil {
-// 	// 	return err
-// 	// }
-// 	//
-// 	// id, err := db.Insert(doc)
-// 	//
-// 	// if err != nil {
-// 	// 	return err
-// 	// }
-// 	//
-// 	// err = db.InsertDocumentText(id, bytes)
-// 	// if err != nil {
-// 	// 	return err
-// 	// }
-// 	//
-// 	// fmt.Printf("%s got id %d (internal path: %s)", fp, id, fakePath)
-// 	// fmt.Println()
-//
-// 	return nil
-// }
+import (
+	"io/ioutil"
+	"log"
+	"path/filepath"
+	"strings"
+
+	git "gopkg.in/src-d/go-git.v4"
+)
+
+func NewGitProvider(url, namespace string) (DocumentProducer, error) {
+	producer := make(DocumentProducer, 5)
+
+	directory, err := ioutil.TempDir("", "paraphrasegit")
+	if err != nil {
+		return nil, err
+	}
+
+	absPath, err := filepath.Abs(directory)
+	if err != nil {
+		return nil, err
+	}
+
+	prefixlen := len(absPath)
+
+	log.Printf("Cloning %v to %v\n", url, absPath)
+	r, err := git.PlainClone(directory, false, &git.CloneOptions{
+		URL:               url,
+		RecurseSubmodules: git.NoRecurseSubmodules,
+		Depth:             1,
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	head, _ := r.Head()
+	hash := "UNKNOWNHASH"
+	if head != nil {
+		hash = head.Hash().String()
+	}
+
+	trimmedUrl := strings.SplitN(url, "//", 2)[1]
+
+	if namespace == "" {
+		namespace = trimmedUrl + " rev: " + hash
+	}
+
+	log.Println("Finished clone")
+
+	go func() {
+		generatePaths(absPath, namespace, true, prefixlen, producer)
+		//os.RemoveAll(directory) // clean up
+	}()
+
+	return producer, err
+}
