@@ -10,10 +10,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const ()
-
-// TODO add ability to export a subset of paraphrase to another db
-
 func init() {
 	initQueryableCommand(exportCmd)
 }

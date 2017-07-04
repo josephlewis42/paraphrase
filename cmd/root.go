@@ -29,6 +29,7 @@ func init() {
 	RootCmd.AddCommand(searchCmd)
 
 	RootCmd.AddCommand(exportCmd)
+	RootCmd.AddCommand(importCmd)
 
 	RootCmd.AddCommand(versionCmd)
 	RootCmd.AddCommand(infoCmd)
@@ -39,9 +40,6 @@ func init() {
 	GenCmd.AddCommand(genmanCmd)
 	GenCmd.AddCommand(gendocCmd)
 	GenCmd.AddCommand(genAutocompleteCmd)
-
-	// commands for debugging
-	// RootCmd.AddCommand(CmdXNorm, CmdXSim, CmdXWinnow, CmdXHash)
 
 	RootCmd.PersistentFlags().StringVarP(&projectBase, "base", "b", ".", "base project directory")
 	RootCmd.PersistentFlags().StringVar(&cpuprofile, "cpuprofile", "", "write cpu profiling info to file")
