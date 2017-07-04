@@ -9,12 +9,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var infoCmd = &cobra.Command{
-	Use:     "info",
-	Short:   "Writes general information about Paraphrase's settings and Database",
-	Long:    `Writes general information about Paraphrase's settings and Database`,
+var changelogCmd = &cobra.Command{
+	Use:     "changelog",
+	Short:   "Writes information about changes to the database.",
+	Long:    `Writes information about changes to the database.`,
 	PreRunE: openDb,
 	Run: func(cmd *cobra.Command, args []string) {
-		db.WriteStats(os.Stdout)
+		db.WriteChanges(os.Stdout)
 	},
 }

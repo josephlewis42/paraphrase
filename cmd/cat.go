@@ -10,10 +10,7 @@ const (
 )
 
 func init() {
-	catCmd.Flags().StringVarP(&findShaParam, "sha", "s", "", "find by sha1 or sha1 prefix")
-	catCmd.Flags().StringVarP(&findIdParam, "id", "i", "", "search by a document's id")
-	catCmd.Flags().StringVarP(&findPathParam, "path", "p", "", "search by a document's path")
-	catCmd.Flags().StringVarP(&findNamespaceParam, "namespace", "n", "", "search by a document's namespace")
+	initQueryableCommand(catCmd)
 }
 
 var catCmd = &cobra.Command{

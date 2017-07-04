@@ -3,20 +3,25 @@ package paraphrase
 import (
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"path"
 	"regexp"
 	"strings"
+	"text/tabwriter"
 	"time"
 
 	"github.com/asdine/storm"
 	"github.com/asdine/storm/q"
+	"github.com/bradhe/stopwatch"
 	"github.com/josephlewis42/paraphrase/paraphrase/provider"
 	"github.com/josephlewis42/paraphrase/paraphrase/snappyjson"
+	"gopkg.in/cheggaaa/pb.v1"
 )
 
 const (
-	DbName                 = "paraphrasedb.bolt"
+	DbExt                  = ".ppdb"
+	DbName                 = "paraphrasedb.ppdb"
 	DocumentBucket         = "documents"
 	IndexBucket            = "index"
 	SettingsBucket         = "settings"
@@ -30,6 +35,8 @@ const (
 var (
 	SettingsNotDefinedErr = errors.New("No settings found. If you meant to create a database run 'paraphrase init'")
 	AlreadyInitializedErr = errors.New("It looks like paraphrase has already been initialized.")
+	ImportErr             = errors.New("Errors encountered while importing documents")
+	DatabaseDNEErr        = errors.New("It looks like the database does not exist, try running paraphrase init to create it")
 )
 
 type Settings struct {
@@ -67,6 +74,7 @@ func Create(directory string, settings Settings) (*ParaphraseDb, error) {
 		return nil, AlreadyInitializedErr
 	case SettingsNotDefinedErr:
 		db.settings = settings
+		db.logChange("Created Database")
 		return db, db.saveSettings()
 	default:
 		return nil, err
@@ -83,7 +91,7 @@ func Open(directory string) (*ParaphraseDb, error) {
 
 	// Open the my.db data file in your current directory.
 	// It will be created if it doesn't exist.
-	dbPath := path.Join(directory, DbName)
+	dbPath := findDbPath(directory)
 
 	// paraphrase.db, err = storm.Open(dbPath, storm.Codec(snappyjson.Codec))
 	paraphrase.db, err = storm.Open(dbPath, storm.Codec(snappyjson.MsgpackCodec))
@@ -105,6 +113,15 @@ func Open(directory string) (*ParaphraseDb, error) {
 	return &paraphrase, nil
 }
 
+func findDbPath(directory string) string {
+
+	if path.Ext(directory) == DbExt {
+		return directory
+	}
+
+	return path.Join(directory, DbName)
+}
+
 func (p *ParaphraseDb) init() error {
 
 	err := p.db.Init(&Document{})
@@ -113,7 +130,6 @@ func (p *ParaphraseDb) init() error {
 	}
 
 	err = p.db.Init(&DocumentData{})
-
 	if err != nil {
 		return err
 	}
@@ -124,6 +140,11 @@ func (p *ParaphraseDb) init() error {
 	}
 
 	err = p.db.Init(&Settings{})
+	if err != nil {
+		return err
+	}
+
+	err = p.db.Init(&ChangeLogEntry{})
 	if err != nil {
 		return err
 	}
@@ -154,6 +175,7 @@ func (p *ParaphraseDb) loadSettings() error {
 }
 
 func (p *ParaphraseDb) saveSettings() error {
+	p.logChange("Saved Settings")
 	return p.db.Save(&p.settings)
 }
 
@@ -161,31 +183,128 @@ func (p *ParaphraseDb) GetSettings() Settings {
 	return p.settings
 }
 
+// Write information about Paraphrase and the database to an output.
+// Output format _may change without warning_.
+func (p *ParaphraseDb) WriteStats(writer io.Writer) {
+
+	boltInfo := p.db.Bolt.Info()
+	docCount, _ := p.CountDocuments()
+	hashCount, _ := p.db.Count(&IndexEntry{})
+
+	settings := []struct {
+		Group   string
+		Title   string
+		Setting interface{}
+	}{
+		{"Paraphrase Settings", "", ""},
+		{"", "Version", p.settings.Version},
+		{"", "Window Size", p.settings.WindowSize},
+		{"", "Fingerprint Length", p.settings.FingerprintSize},
+		{"", "Robust Winnow?", p.settings.RobustHash},
+		{"", "Creation Date", p.settings.CreatedAt},
+		{"Database Information", "", ""},
+		{"", "Page Size", boltInfo.PageSize},
+		{"", "Number of Documents", docCount},
+		{"", "Number of Distinct Hashes", hashCount},
+	}
+
+	w := new(tabwriter.Writer)
+	w.Init(writer, 0, 8, 0, '\t', 0)
+
+	for _, setting := range settings {
+		fmt.Fprintf(w, "%v\t%v\t%v\n", setting.Group, setting.Title, setting.Setting)
+	}
+	w.Flush()
+
+}
+
 func (p *ParaphraseDb) AddDocuments(producer provider.DocumentProducer) (added []Document, ok bool) {
+	start := stopwatch.Start()
 	added = make([]Document, 0)
 	ok = true
 
-	for key := range producer {
-		log.Printf("Adding %s %s\n", key.Namespace(), key.Path())
-		body, err := key.Body()
+	for {
+		select {
+		case key, ok := <-producer:
+			if !ok {
+				producer = nil
+				break
+			}
 
-		if err != nil {
-			log.Printf("Error getting body of %s: %s", key.Path(), err)
-			ok = false
-			continue
+			log.Printf("Adding %s %s\n", key.Namespace(), key.Path())
+			log.Println("\tGetting Body")
+
+			body, err := key.Body()
+
+			if err != nil {
+				log.Printf("Error getting body of %s: %s", key.Path(), err)
+				ok = false
+				continue
+			}
+
+			log.Println("\tSaving Document")
+			doc, err := p.CreateDocument(key.Path(), key.Namespace(), body)
+			if err != nil {
+				log.Printf("Error saving document %s: %s", key.Path(), err)
+				ok = false
+				continue
+			}
+
+			added = append(added, *doc)
+			log.Println("Moving on to next document")
+		case <-time.After(time.Second * 1):
+			log.Println("Waiting for more documents...")
 		}
 
-		doc, err := p.CreateDocument(key.Path(), key.Namespace(), body)
-		if err != nil {
-			log.Printf("Error saving document %s: %s", key.Path(), err)
-			ok = false
-			continue
+		if producer == nil {
+			break
 		}
-
-		added = append(added, *doc)
 	}
 
+	watch := stopwatch.Stop(start)
+	p.logChange("Added %v documents in %v ms, Had failures? %v", len(added), watch.Milliseconds(), !ok)
+
 	return added, ok
+}
+
+func (p *ParaphraseDb) ImportDocumentsMatching(from *ParaphraseDb, query Document) error {
+	start := stopwatch.Start()
+
+	docs, err := from.FindDocumentsLike(query)
+
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Starting import of %d documents\n", len(docs))
+
+	bar := pb.StartNew(len(docs))
+	var result error
+
+	for _, doc := range docs {
+		bar.Increment()
+
+		data, err := from.FindDocumentDataById(doc.Id)
+		if err != nil {
+			log.Printf("Error getting the data for document: %s %s: %s", doc.Id, doc.Path, err)
+			result = ImportErr
+			continue
+		}
+
+		_, locerr := p.CreateDocument(doc.Path, doc.Namespace, data.Body)
+
+		if locerr != nil {
+			log.Printf("Error saving document %s: %s", doc.Path, err)
+			result = ImportErr
+		}
+	}
+
+	bar.FinishPrint("Finished importing")
+
+	watch := stopwatch.Stop(start)
+	p.logChange("Imported %v documents matching %v ion %v ms, err %v", len(docs), query, watch.Milliseconds(), result)
+
+	return result
 }
 
 func (p *ParaphraseDb) CreateDocument(path, namespace string, body []byte) (*Document, error) {
@@ -194,6 +313,7 @@ func (p *ParaphraseDb) CreateDocument(path, namespace string, body []byte) (*Doc
 	doc, docData := NewDocument(path, namespace, body)
 
 	// generate hashes
+
 	doc.Hashes, err = p.WinnowData(body)
 
 	if err != nil {
@@ -224,7 +344,11 @@ func (p *ParaphraseDb) CreateDocument(path, namespace string, body []byte) (*Doc
 		return nil, err
 	}
 
-	return doc, tx.Commit()
+	err = tx.Commit()
+
+	p.logChange("Created document %v", doc.Id)
+
+	return doc, err
 }
 
 func (p *ParaphraseDb) CountDocuments() (int, error) {

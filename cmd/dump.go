@@ -10,16 +10,12 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/josephlewis42/paraphrase/paraphrase"
 	"github.com/kennygrant/sanitize"
 	"github.com/spf13/cobra"
 )
 
 func init() {
-	dumpCmd.Flags().StringVarP(&findShaParam, "sha", "s", "", "find by sha1 or sha1 prefix")
-	dumpCmd.Flags().StringVarP(&findIdParam, "id", "i", "", "search by a document's id")
-	dumpCmd.Flags().StringVarP(&findPathParam, "path", "p", "", "search by a document's path")
-	dumpCmd.Flags().StringVarP(&findNamespaceParam, "namespace", "n", "", "search by a document's namespace")
+	initQueryableCommand(dumpCmd)
 	dumpCmd.Flags().BoolVar(&dumpDryRun, "dry", false, "Do a dry run (don't create anything)")
 }
 
@@ -34,12 +30,7 @@ var dumpCmd = &cobra.Command{
 			return errors.New("You must specify one directory to write to")
 		}
 
-		var doc paraphrase.Document
-
-		doc.Id = findIdParam
-		doc.Path = findPathParam
-		doc.Sha1 = findShaParam
-		doc.Namespace = findNamespaceParam
+		doc := getQuery()
 
 		docs, err := db.FindDocumentsLike(doc)
 

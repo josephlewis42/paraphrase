@@ -57,22 +57,16 @@ CLI Style:
 `
 
 var (
-	findShaParam       string
-	findIdParam        string
-	findPathParam      string
-	findNamespaceParam string
-	findOutputFormat   string
-	findFullSha        bool
-	dumpDryRun         bool
+	findOutputFormat string
+	findFullSha      bool
+	dumpDryRun       bool
 )
 
 func init() {
-	findCmd.Flags().StringVarP(&findShaParam, "sha", "s", "", "find by sha1 or sha1 prefix")
-	findCmd.Flags().StringVarP(&findIdParam, "id", "i", "", "search by a document's id")
-	findCmd.Flags().StringVarP(&findPathParam, "path", "p", "", "search by a document's path")
-	findCmd.Flags().StringVarP(&findNamespaceParam, "namespace", "n", "", "search by a document's namespace")
 	findCmd.Flags().BoolVar(&findFullSha, "full-sha", false, "Show the full sha1 hash")
 	findCmd.Flags().StringVar(&findOutputFormat, "fmt", "", "Format the results of the find in a particular way")
+
+	initQueryableCommand(findCmd)
 }
 
 var findCmd = &cobra.Command{
@@ -112,12 +106,7 @@ Change the format of the output.
 	PreRunE: openDb,
 	RunE: func(cmd *cobra.Command, args []string) error {
 
-		var doc paraphrase.Document
-
-		doc.Id = findIdParam
-		doc.Path = findPathParam
-		doc.Sha1 = findShaParam
-		doc.Namespace = findNamespaceParam
+		doc := getQuery()
 
 		docs, err := db.FindDocumentsLike(doc)
 

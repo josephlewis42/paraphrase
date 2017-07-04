@@ -43,7 +43,6 @@ characteristics" of the document. For example, a fingerprint window of size 2:
 `
 
 func init() {
-	// TODO fill this out so we can have better settings
 	RootCmd.AddCommand(initCmd)
 }
 

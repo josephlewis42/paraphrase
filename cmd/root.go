@@ -4,8 +4,6 @@
 package cmd
 
 import (
-	"errors"
-	"fmt"
 	"log"
 	"os"
 	"runtime/pprof"
@@ -30,7 +28,11 @@ func init() {
 	RootCmd.AddCommand(dumpCmd)
 	RootCmd.AddCommand(searchCmd)
 
+	RootCmd.AddCommand(exportCmd)
+
 	RootCmd.AddCommand(versionCmd)
+	RootCmd.AddCommand(infoCmd)
+	RootCmd.AddCommand(changelogCmd)
 	RootCmd.AddCommand(licenseCmd)
 	RootCmd.AddCommand(GenCmd)
 
@@ -95,20 +97,27 @@ func openDb(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// parseDocIds converts a list of strings to uint64s
-// it will process the whole list even if an error is encountered
-// so if only one element is bad, the rest will still be returned
-// if the total number of successfully parse elements is less than numRequired
-// an appropriate error will be returned
-func parseDocIds(args []string, numRequired int) ([]string, error) {
+var (
+	queryableShaParam       string
+	queryableIdParam        string
+	queryablePathParam      string
+	queryableNamespaceParam string
+)
 
-	if len(args) < numRequired {
-		if numRequired == 1 {
-			return args, errors.New("You must supply at least one documents")
-		} else {
-			return args, errors.New(fmt.Sprintf("You must supply at least %d documents", numRequired))
-		}
-	}
+func initQueryableCommand(cmd *cobra.Command) {
+	cmd.Flags().StringVarP(&queryableShaParam, "sha", "s", "", "find by sha1 or sha1 prefix")
+	cmd.Flags().StringVarP(&queryableIdParam, "id", "i", "", "search by a document's id")
+	cmd.Flags().StringVarP(&queryablePathParam, "path", "p", "", "search by a document's path")
+	cmd.Flags().StringVarP(&queryableNamespaceParam, "namespace", "n", "", "search by a document's namespace")
+}
 
-	return args, nil
+func getQuery() paraphrase.Document {
+	var query paraphrase.Document
+
+	query.Id = queryableIdParam
+	query.Path = queryablePathParam
+	query.Sha1 = queryableShaParam
+	query.Namespace = queryableNamespaceParam
+
+	return query
 }
