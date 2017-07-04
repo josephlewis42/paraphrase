@@ -8,6 +8,8 @@ import (
 	"math/rand"
 	"text/tabwriter"
 	"time"
+
+	"github.com/josephlewis42/paraphrase/paraphrase/linalg"
 )
 
 const (
@@ -17,6 +19,20 @@ const (
 )
 
 type TermCountVector map[uint64]int16
+
+func (vec TermCountVector) NormalizedTermFrequency() linalg.IFVector {
+	tfVector := make(linalg.IFVector)
+	totalTerms := 0
+
+	for hash, count := range vec {
+		totalTerms += int(count)
+		tfVector[hash] = float64(count)
+	}
+
+	tfVector.DivF(float64(totalTerms))
+
+	return tfVector
+}
 
 func init() {
 	rand.Seed(time.Now().UnixNano())
@@ -29,6 +45,10 @@ type Document struct {
 	IndexDate time.Time
 	Sha1      string `storm:"index"`
 	Hashes    TermCountVector
+}
+
+func (d *Document) NormalizedTermFrequency() linalg.IFVector {
+	return d.Hashes.NormalizedTermFrequency()
 }
 
 // Writes the documents in fashion suitable for displaying on-screen

@@ -30,11 +30,16 @@ func (p *ParaphraseDb) getIndex(hash uint64) ([]IndexEntry, error) {
 }
 
 type SearchResult struct {
-	Query *TermCountVector
-	Doc   *Document
+	Query      *TermCountVector
+	Doc        *Document
+	similarity float64
 }
 
 func (sr *SearchResult) Similarity() float64 {
+	if sr.similarity != 0.0 {
+		return sr.similarity
+	}
+
 	match := 0.0
 	mismatch := 0.0
 
@@ -107,6 +112,9 @@ func (p *ParaphraseDb) QueryByVector(query TermCountVector) (results []SearchRes
 		}
 	}
 
+	queryNorm := query.NormalizedTermFrequency()
+	queryNorm.Prod(idfVector)
+
 	for id, _ := range matchingDocIds {
 		doc, err := p.FindDocumentById(id)
 		if err != nil {
@@ -114,7 +122,12 @@ func (p *ParaphraseDb) QueryByVector(query TermCountVector) (results []SearchRes
 			continue
 		}
 
-		results = append(results, SearchResult{&query, doc})
+		docNorm := doc.NormalizedTermFrequency()
+		docNorm.Prod(idfVector)
+
+		similarity := docNorm.CosineSimilarity(queryNorm)
+
+		results = append(results, SearchResult{&query, doc, similarity})
 	}
 
 	slice.Sort(results[:], func(i, j int) bool {
